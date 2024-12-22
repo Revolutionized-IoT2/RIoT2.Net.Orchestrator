@@ -14,5 +14,5 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Build the Docker image
-      run: docker build -t riot2-orchestrator . --build-arg NUGET_AUTH_TOKEN=${{ secrets.NUGET_PACKAGE_TOKEN }}
+      run: docker build -t riot2-orchestrator:latest -t riot2-orchestrator:${{ github.ref_name }} . --build-arg NUGET_AUTH_TOKEN=${{ secrets.NUGET_PACKAGE_TOKEN }}
  
