@@ -22,7 +22,7 @@ jobs:
 
       - name: Build the Docker image
         run: |
-         docker build -t riot2-orchestrator:latest -t riot2-orchestrator:${{ github.ref_name }} . --build-arg NUGET_AUTH_TOKEN=${{ secrets.NUGET_PACKAGE_TOKEN }}
+         docker build -t ghcr.io/revolutionized-iot2/riot2-orchestrator:latest -t ghcr.io/revolutionized-iot2/riot2-orchestrator:${{ github.ref_name }} . --build-arg NUGET_AUTH_TOKEN=${{ secrets.NUGET_PACKAGE_TOKEN }}
          docker push ghcr.io/revolutionized-iot2/riot2-orchestrator:latest
          docker push ghcr.io/revolutionized-iot2/riot2-orchestrator:${{ github.ref_name }}
        
