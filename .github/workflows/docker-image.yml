@@ -9,15 +9,17 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Build the Docker image
+    
     - name: Login to GitHub Container Registry
     - uses: docker/login-action@v3
       with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.NUGET_PACKAGE_TOKEN }}
-          run: |
-                docker build -t riot2-orchestrator:latest -t riot2-orchestrator:${{ github.ref_name }} . --build-arg NUGET_AUTH_TOKEN=${{ secrets.NUGET_PACKAGE_TOKEN }}
-                docker push ghcr.io/Revolutionized-IoT2/riot2-orchestrator:latest
-                docker push ghcr.io/Revolutionized-IoT2/riot2-orchestrator:${{ github.ref_name }}
+          
+    - name: Build the Docker image
+    - uses: actions/checkout@v4
+    - run: |
+        docker build -t riot2-orchestrator:latest -t riot2-orchestrator:${{ github.ref_name }} . --build-arg NUGET_AUTH_TOKEN=${{ secrets.NUGET_PACKAGE_TOKEN }}
+        docker push ghcr.io/Revolutionized-IoT2/riot2-orchestrator:latest
+        docker push ghcr.io/Revolutionized-IoT2/riot2-orchestrator:${{ github.ref_name }} 
