@@ -1,0 +1,18 @@
+name: Docker Image CI
+
+on:
+  push:
+    tags:
+      - '*.*.*'
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build the Docker image
+      run: docker build -t riot2-orchestrator . --build-arg NUGET_AUTH_TOKEN=${{ secrets.NUGET_PACKAGE_TOKEN }}
+ 
