@@ -8,6 +8,8 @@
     <DockerfileContext>.</DockerfileContext>
 	<InvariantGlobalization>true</InvariantGlobalization>
 	<IncludeSymbols>False</IncludeSymbols>
+	<IsPublishable>true</IsPublishable>
+	<EnableSdkContainerSupport>true</EnableSdkContainerSupport>
   </PropertyGroup>
 
   <ItemGroup>
