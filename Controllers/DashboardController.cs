@@ -27,9 +27,15 @@ namespace RIoT2.Net.Orchestrator.Controllers
                 includeHistory = HttpContext.Request.Query["history"].ToString().ToLower() == "true";
 
             var config = _configuration.DashboardConfiguration;
-
-            if (includeHistory)
-                updateHistory(ref config);
+            if (config != null)
+            {
+                if (includeHistory)
+                    updateHistory(ref config);
+            }
+            else 
+            {
+                config = new DashboardConfiguration();
+            }
 
             return Content(Json.Serialize(config), "application/json");
             //return new OkObjectResult(config);
