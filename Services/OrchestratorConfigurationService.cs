@@ -216,15 +216,36 @@ namespace RIoT2.Net.Orchestrator.Services
         {
             try
             {
-                //remove template data before saving...
-                foreach (var p in dashboard.Pages) 
+                if (dashboard.Pages == null)
                 {
-                    foreach (var c in p.Components) 
+                    dashboard.Pages = [];
+                }
+                else 
+                {
+                    //remove template data before saving...
+                    foreach (var p in dashboard.Pages)
                     {
-                        foreach (var e in c.Elements) 
+                        if (p.Components == null)
                         {
-                            e.ReportTemplate = e.ReportTemplate != null ? new ReportTemplate { Id = e.ReportTemplate.Id } : null;
-                            e.CommandTemplate = e.CommandTemplate != null ? new CommandTemplate { Id = e.CommandTemplate.Id } : null;
+                            p.Components = [];
+                        }
+                        else 
+                        {
+                            foreach (var c in p.Components)
+                            {
+                                if (c.Elements == null) 
+                                {
+                                    c.Elements = [];
+                                }
+                                else 
+                                {
+                                    foreach (var e in c.Elements)
+                                    {
+                                        e.ReportTemplate = e.ReportTemplate != null ? new ReportTemplate { Id = e.ReportTemplate.Id } : null;
+                                        e.CommandTemplate = e.CommandTemplate != null ? new CommandTemplate { Id = e.CommandTemplate.Id } : null;
+                                    }
+                                }
+                            }
                         }
                     }
                 }
