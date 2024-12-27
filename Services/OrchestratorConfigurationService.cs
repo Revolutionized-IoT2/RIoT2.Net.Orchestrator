@@ -171,16 +171,30 @@ namespace RIoT2.Net.Orchestrator.Services
                 if (String.IsNullOrEmpty(dev.Id))
                     dev.Id = Guid.NewGuid().ToString();
 
-                foreach (var r in dev.ReportTemplates)
+                if (dev.ReportTemplates == null) 
                 {
-                    if (String.IsNullOrEmpty(r.Id))
-                        r.Id = Guid.NewGuid().ToString();
+                    dev.ReportTemplates = [];
+                }
+                else 
+                {
+                    foreach (var r in dev.ReportTemplates)
+                    {
+                        if (String.IsNullOrEmpty(r.Id))
+                            r.Id = Guid.NewGuid().ToString();
+                    }
                 }
 
-                foreach (var c in dev.CommandTemplates)
+                if (dev.CommandTemplates == null)
                 {
-                    if (String.IsNullOrEmpty(c.Id))
-                        c.Id = Guid.NewGuid().ToString();
+                    dev.CommandTemplates = [];
+                }
+                else 
+                {
+                    foreach (var c in dev.CommandTemplates ?? Enumerable.Empty<CommandTemplate>())
+                    {
+                        if (String.IsNullOrEmpty(c.Id))
+                            c.Id = Guid.NewGuid().ToString();
+                    }
                 }
             }
 
