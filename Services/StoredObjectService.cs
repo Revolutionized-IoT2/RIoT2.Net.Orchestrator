@@ -32,12 +32,12 @@ namespace RIoT2.Net.Orchestrator.Services
             {
                 load<T>();
                 if (!_objects.ContainsKey(t))
-                    return Enumerable.Empty<T>();
+                    return [];
             }
 
             var objs = _objects[t];
             if (objs == null)
-                return null;
+                return [];
 
             //TODO uncomment if needed
             //StoredObjectEvent?.Invoke(typeof(T), objs, OperationType.Read);
@@ -59,9 +59,14 @@ namespace RIoT2.Net.Orchestrator.Services
             if (persistent)
             {
                 if (!directory.Exists)
+                {
                     directory.Create();
-                else
+                    _logger.LogWarning($"Saving stored objects. Folder {directory.FullName} did not exist. Directory Created.");
+                }
+                else 
+                {
                     delete<T>(id, persistent);
+                }
 
                 try
                 {
@@ -125,8 +130,8 @@ namespace RIoT2.Net.Orchestrator.Services
             DirectoryInfo directory = new DirectoryInfo(Path.Combine(_storedObjectsFolder, t));
             if (!directory.Exists)
             {
-                _logger.LogWarning($"Object directory does not exist. Objects not loaded.");
-                return;
+                directory.Create();
+                _logger.LogWarning($"Loading stored objects. Folder {directory.FullName} did not exist. Directory Created.");
             }
 
             try
