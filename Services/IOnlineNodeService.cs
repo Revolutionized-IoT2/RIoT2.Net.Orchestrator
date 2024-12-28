@@ -9,6 +9,7 @@ namespace RIoT2.Net.Orchestrator.Services
         void Remove(string id);
         IEnumerable<OnlineNode> OnlineNodes { get; }
 
+        Task<List<DeviceStatus>> LoadDeviceStatusFromNodeAsync(string nodeId);
         Task<List<DeviceConfiguration>> LoadDeviceConfigurationTemplateAsync(string id);
         Task<Dictionary<string, List<DeviceConfiguration>>> LoadDeviceConfigurationTemplatesAsync();
     }
