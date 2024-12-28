@@ -91,6 +91,17 @@ namespace RIoT2.Net.Orchestrator.Services
                 _dashboardConfiguration = _storedObjectService.GetAll<DashboardConfiguration>().FirstOrDefault();
                 _variables = _storedObjectService.GetAll<Variable>();
 
+                //Create default dashboard if there is nothing stored
+                if (_dashboardConfiguration == null) 
+                {
+                    _dashboardConfiguration = new DashboardConfiguration()
+                    {
+                        Name = "",
+                        Id = "",
+                        Pages = []
+                    };
+                }
+
                 updateNodeIdToCommandTemplates();
                 refreshDashboardTemplates();
             }
@@ -102,6 +113,9 @@ namespace RIoT2.Net.Orchestrator.Services
 
         private void updateNodeIdToCommandTemplates() 
         {
+            if(_nodes == null || _nodes.Count == 0)
+                return;
+
             foreach (var node in _nodes) 
             {
                 if (node.DeviceConfigurations == null)
@@ -120,6 +134,9 @@ namespace RIoT2.Net.Orchestrator.Services
 
         private void refreshDashboardTemplates() 
         {
+            if (_nodes == null || _nodes.Count == 0)
+                return;
+
             var currentReportTemplates = GetReportTemplates();
             var currentCommandTemplates = GetCommandTemplates();
 
