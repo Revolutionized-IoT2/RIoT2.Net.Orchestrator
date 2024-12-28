@@ -5,6 +5,7 @@ using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Utils;
 using RIoT2.Core.Models;
 using RIoT2.Core;
+using RIoT2.Net.Orchestrator.Models;
 
 namespace RIoT2.Net.Orchestrator.Controllers
 {
@@ -32,16 +33,22 @@ namespace RIoT2.Net.Orchestrator.Controllers
         [HttpGet]
         public IActionResult GetNodes()
         {
+            List<Node> nodes = new List<Node>();
             var onlineNodes = _onlineNodeService.OnlineNodes.Select(x => x.Id).ToList();
-            var allNodes = _configuration.NodeConfigurations.Select(x => 
-            new {
-                x.Name, 
-                x.Id, 
-                HasDevices = x.DeviceConfigurations?.Count > 0, 
-                IsOnline = onlineNodes.Contains(x.Id)  }
-            ).ToList();
 
-            return new OkObjectResult(allNodes);
+            foreach (var conf in _configuration.NodeConfigurations) 
+            {
+                nodes.Add(new Node() { 
+                    Id = conf.Id,
+                    Name = conf.Name,
+                    IsOnline = onlineNodes.Contains(conf.Id),
+                    DeviceStatuses = _onlineNodeService.LoadDeviceStatusFromNodeAsync(conf.Id).Result
+                });
+            }
+
+            //TODO load all node statuses at the same time
+
+            return new OkObjectResult(nodes);
         }
 
         [HttpGet("online")]

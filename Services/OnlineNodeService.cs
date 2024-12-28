@@ -1,4 +1,5 @@
-﻿using RIoT2.Core.Models;
+﻿using RIoT2.Core;
+using RIoT2.Core.Models;
 using RIoT2.Core.Utils;
 using RIoT2.Net.Orchestrator.Models;
 
@@ -67,6 +68,31 @@ namespace RIoT2.Net.Orchestrator.Services
             catch(Exception x) 
             {
                 _logger.LogError(x, $"Could not load configuration template for {id}");
+            }
+            return null;
+        }
+
+        public async Task<List<DeviceStatus>> LoadDeviceStatusFromNodeAsync(string nodeId)
+        {
+            var onlineNode = _onlineNodes.FirstOrDefault(x => x.Id == nodeId);
+            if (onlineNode == default)
+                return null;
+
+            try
+            {
+                var statusUrl = onlineNode.OnlineNodeSettings.DeviceStateUrl;
+                var response = await Web.GetAsync(statusUrl);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var json = await response.Content.ReadAsStringAsync();
+                    var listOfDeviceStatus = Json.Deserialize<List<DeviceStatus>>(json);
+                    return listOfDeviceStatus;
+                }
+            }
+            catch (Exception x)
+            {
+                _logger.LogError(x, $"Could not load Device status data for node: {nodeId}");
             }
             return null;
         }
