@@ -6,3 +6,5 @@
 /obj
 *.user
 /bin/Debug/net8.0
+/StoredObjects/*
+/Properties/launchSettings.json
