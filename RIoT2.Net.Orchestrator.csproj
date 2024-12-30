@@ -17,8 +17,4 @@
     <PackageReference Include="RIoT2.Core" Version="0.1.5" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="StoredObjects\" />
-  </ItemGroup>
-
 </Project>
