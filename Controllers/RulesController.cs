@@ -44,7 +44,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
         public IActionResult SaveRule([FromBody] Models.RuleDTO rule)
         {
             //Have to use DTO, because system.text.json cannot handle interfaces 
-            var id = _ruleManagementService.Save(rule.ToRule());
+            var id = _ruleManagementService.Save(rule.ToRule(), true, true);
 
             if (!string.IsNullOrEmpty(id))
                 return new OkObjectResult(id);

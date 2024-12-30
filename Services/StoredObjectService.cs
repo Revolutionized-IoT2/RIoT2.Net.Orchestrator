@@ -44,7 +44,7 @@ namespace RIoT2.Net.Orchestrator.Services
             return objs.OfType<T>();
         }
 
-        public string Save<T>(T obj, bool persistent = true)
+        public string Save<T>(T obj, bool persistent = true, bool autoTypeNameHandling = false)
         {
             var id = Guid.NewGuid().ToString();
             var t = getTypeString(typeof(T));
@@ -52,7 +52,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 (obj as dynamic).Id = id;
             else
                 id = (obj as dynamic).Id;
-            var json = Json.SerializeAutoTypeNameHandling(obj);
+            var json = Json.SerializeAutoTypeNameHandling(obj, autoTypeNameHandling);
             var fullFileName = Path.Combine(_storedObjectsFolder, t, id + ".json");
             DirectoryInfo directory = new DirectoryInfo(Path.Combine(_storedObjectsFolder, t));
 
