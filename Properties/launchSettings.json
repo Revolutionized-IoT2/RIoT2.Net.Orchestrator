@@ -10,10 +10,7 @@
         "RIOT2_ORCHESTRATOR_URL": "http://192.168.0.124:7104", //http://192.168.0.32
         "RIOT2_MQTT_IP": "192.168.0.30",
         "RIOT2_MQTT_USERNAME": "user",
-        "RIOT2_MQTT_PASSWORD": "password",
-        "RIOT2_QNAP_IP": "192.168.0.13",
-        "RIOT2_QNAP_USERNAME": "user",
-        "RIOT2_QNAP_PASSWORD": "password"
+        "RIOT2_MQTT_PASSWORD": "password"
       },
       "applicationUrl": "http://0.0.0.0:7104;https://localhost:5104",
       "dotnetRunMessages": true
