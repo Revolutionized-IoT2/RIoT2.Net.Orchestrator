@@ -73,12 +73,6 @@ namespace RIoT2.Net.Orchestrator.Services
                     Password = Environment.GetEnvironmentVariable("RIOT2_MQTT_PASSWORD"),
                     ServerUrl = Environment.GetEnvironmentVariable("RIOT2_MQTT_IP"),
                     Username = Environment.GetEnvironmentVariable("RIOT2_MQTT_USERNAME")
-                },
-                Qnap = new QnapConfiguration() 
-                {
-                    ServerUrl = Environment.GetEnvironmentVariable("RIOT2_QNAP_IP"),
-                    Username = Environment.GetEnvironmentVariable("RIOT2_QNAP_USERNAME"),
-                    Password  = Environment.GetEnvironmentVariable("RIOT2_QNAP_PASSWORD")
                 }
             };
         }
