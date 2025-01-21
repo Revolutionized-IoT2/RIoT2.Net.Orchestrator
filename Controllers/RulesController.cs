@@ -60,7 +60,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
                 return BadRequest($"Rule with id {id} not found.");
 
             rule.IsActive = toState.ToLower() == "true";
-            _ruleManagementService.Save(rule);
+            _ruleManagementService.Save(rule, true, true);
 
             return new OkObjectResult(id);
         }
