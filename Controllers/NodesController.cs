@@ -201,7 +201,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
                     v.Name,
                     v.Id,
                     v.Model.Type,
-                    v.Model
+                    Model = v.Value
                 });
             }
             return new OkObjectResult(a);
@@ -265,13 +265,36 @@ namespace RIoT2.Net.Orchestrator.Controllers
         [HttpGet("variables")]
         public IActionResult GetVariables()
         {
-            return new OkObjectResult(_storedObjectService.GetAll<Variable>().ToList());
+            var variableDTOs = new List<VariableDTO>();
+            foreach (var variable in _storedObjectService.GetAll<Variable>())
+                variableDTOs.Add(VariableDTO.ToVariableDTO(variable));
+       
+            return new OkObjectResult(variableDTOs);
         }
 
         [HttpPost("variable/save")]
-        public IActionResult SaveVariable([FromBody] Variable variable)
+        public IActionResult SaveVariable([FromBody] VariableDTO variable)
         {
-            if (!string.IsNullOrEmpty(_storedObjectService.Save(variable)))
+            //If variable is number validate it
+            if (variable.Type == Core.ValueType.Number) 
+            {
+                if (variable.Value.ToString().Contains('.'))
+                {
+                    if (double.TryParse(variable.Value.ToString(), out double d))
+                        variable.Value = d;
+                    else
+                        return BadRequest();
+                }
+                else 
+                {
+                    if (int.TryParse(variable.Value.ToString(), out int i))
+                        variable.Value = i;
+                    else
+                        return BadRequest();
+                }
+            }
+
+            if (!string.IsNullOrEmpty(_storedObjectService.Save(variable.ToVariable())))
                 return NoContent();
             else
                 return Problem();
