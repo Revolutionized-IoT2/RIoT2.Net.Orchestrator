@@ -14,7 +14,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.0" />
-    <PackageReference Include="RIoT2.Core" Version="0.1.12" />
+    <PackageReference Include="RIoT2.Core" Version="0.1.13" />
   </ItemGroup>
 
 </Project>

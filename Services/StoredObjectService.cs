@@ -56,6 +56,23 @@ namespace RIoT2.Net.Orchestrator.Services
             var fullFileName = Path.Combine(_storedObjectsFolder, t, id + ".json");
             DirectoryInfo directory = new DirectoryInfo(Path.Combine(_storedObjectsFolder, t));
 
+            //Check if current exists -> if does and no change, do nothing
+            var objs = _objects[t];
+            if (objs != null)
+            {
+                var currentObject = objs.FirstOrDefault(x => x.Id == id);
+                if (currentObject != null) 
+                {
+                    var currentJson = Json.SerializeAutoTypeNameHandling(currentObject, autoTypeNameHandling);
+                    if (currentJson == json) 
+                    {
+                        _logger.LogInformation("No change in existing object. Object not Saved.");
+                        StoredObjectEvent?.Invoke(typeof(T), obj, OperationType.NoChange);
+                        return id;
+                    }
+                }
+            }
+               
             if (persistent)
             {
                 if (!directory.Exists)
