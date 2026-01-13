@@ -73,7 +73,8 @@ namespace RIoT2.Net.Orchestrator.Services
 
         private async Task sendOrchestratorOnlineCommand()
         {
-            await _client.Publish(Constants.Get("", MqttTopic.OrchestratorOnline), null);
+            //Retain message so nodes can get orchestrator info on reconnect
+            await _client.Publish(Constants.Get("", MqttTopic.OrchestratorOnline), null, true);
         }
 
         public async Task Start()
@@ -117,6 +118,8 @@ namespace RIoT2.Net.Orchestrator.Services
                     _deviceStateService.SetState(report, template.MaintainHistory);
 
                     //TODO validate report against template!
+                    //TODO Reroute report to ELSA if it is configured!
+
                     var rules = new List<Rule>();
                     foreach (var rule in _ruleManagementService.GetAll<Rule>())
                     {
