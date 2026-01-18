@@ -67,6 +67,7 @@ namespace RIoT2.Net.Orchestrator.Services
             {
                 Id = Environment.GetEnvironmentVariable("RIOT2_ORCHESTRATOR_ID"),
                 BaseUrl = Environment.GetEnvironmentVariable("RIOT2_ORCHESTRATOR_URL"),
+                UseExtWorkflowEngine = Environment.GetEnvironmentVariable("RIOT2_USE_EXTERNAL_WORKFLOW_ENGINE") == "1",
                 Mqtt = new MqttConfiguration() 
                 {
                     ClientId = Environment.GetEnvironmentVariable("RIOT2_ORCHESTRATOR_ID"),

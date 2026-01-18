@@ -118,29 +118,45 @@ namespace RIoT2.Net.Orchestrator.Services
                     _deviceStateService.SetState(report, template.MaintainHistory);
 
                     //TODO validate report against template!
-                    //TODO Reroute report to ELSA if it is configured!
 
-                    var rules = new List<Rule>();
-                    foreach (var rule in _ruleManagementService.GetAll<Rule>())
+                    //Re-route report to External Workflow Engine if configured
+                    if (_configuration.OrchestratorConfiguration.UseExtWorkflowEngine)
                     {
-                        if (!rule.IsActive)
-                            continue;
-
-                        if (rule.RuleItems == null || rule.RuleItems.Count < 2)
-                            continue;
-
-                        var trigger = rule.RuleItems.First() as RuleTrigger;
-                        if (trigger?.ReportId != report.Id)
-                            continue;
-
-                        if (!String.IsNullOrEmpty(report.Filter) && !String.IsNullOrEmpty(trigger?.Filter) && trigger?.Filter.ToLower() != report.Filter.ToLower())
-                            continue;
-
-                        rules.Add(rule);
+                        var workflowNode = _onlineNodeService.OnlineNodes.FirstOrDefault(x => x.OnlineNodeSettings.IsOnline && x.OnlineNodeSettings.NodeType == NodeType.Workflow);
+                        if (workflowNode != default)
+                        {
+                            var url = workflowNode.OnlineNodeSettings.NodeBaseUrl + Constants.ApiWorkflowUrl.Replace("{id}", report.Id);
+                            await Web.PostAsync(url, report.ToJson());
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Could not process report {report.Id} because no workflow node is online", report.Id);
+                        }
                     }
+                    else // use internal rule processor
+                    {
+                        var rules = new List<Rule>();
+                        foreach (var rule in _ruleManagementService.GetAll<Rule>())
+                        {
+                            if (!rule.IsActive)
+                                continue;
 
-                    if (rules.Count > 0)
-                        await _processorService.ProcessReportAsync(report, rules, processOutputs);
+                            if (rule.RuleItems == null || rule.RuleItems.Count < 2)
+                                continue;
+
+                            var trigger = rule.RuleItems.First() as RuleTrigger;
+                            if (trigger?.ReportId != report.Id)
+                                continue;
+
+                            if (!String.IsNullOrEmpty(report.Filter) && !String.IsNullOrEmpty(trigger?.Filter) && trigger?.Filter.ToLower() != report.Filter.ToLower())
+                                continue;
+
+                            rules.Add(rule);
+                        }
+
+                        if (rules.Count > 0)
+                            await _processorService.ProcessReportAsync(report, rules, processOutputs);
+                    }
                 }
                 else if (MqttClient.IsMatch(mqttEventArgs.Topic, _nodeOnlineTopic))
                 {
@@ -171,7 +187,7 @@ namespace RIoT2.Net.Orchestrator.Services
         {
             return new ConfigurationCommand()
             {
-                ApiBaseUrl = _configuration.OrchestratorConfiguration.BaseUrl // + $"/api/node/{id}/configuration" : ""
+                ApiBaseUrl = _configuration.OrchestratorConfiguration.BaseUrl
             };
         }
 
