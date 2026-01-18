@@ -55,9 +55,7 @@ namespace RIoT2.Net.Orchestrator.Services
 
             try 
             {
-                var confUrl = onlineNode.OnlineNodeSettings.ConfigurationTemplateUrl;
-                var response = await Web.GetAsync(confUrl);
-
+                var response = await Web.GetAsync(onlineNode.OnlineNodeSettings.NodeBaseUrl + Constants.ApiConfigurationTemplateUrl);
                 if (response.IsSuccessStatusCode)
                 {
                     var json = await response.Content.ReadAsStringAsync();
@@ -80,9 +78,7 @@ namespace RIoT2.Net.Orchestrator.Services
 
             try
             {
-                var statusUrl = onlineNode.OnlineNodeSettings.DeviceStateUrl;
-                var response = await Web.GetAsync(statusUrl);
-
+                var response = await Web.GetAsync(onlineNode.OnlineNodeSettings.NodeBaseUrl + Constants.ApiDeviceStateUrl);
                 if (response.IsSuccessStatusCode)
                 {
                     var json = await response.Content.ReadAsStringAsync();
