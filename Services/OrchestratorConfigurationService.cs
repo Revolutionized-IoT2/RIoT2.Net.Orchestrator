@@ -25,8 +25,24 @@ namespace RIoT2.Net.Orchestrator.Services
 
         public string FindNodeId(string commandId)
         {
-            var node = _nodes.FirstOrDefault(x => x.DeviceConfigurations.Any(y => y.CommandTemplates.Any(c => c.Id == commandId)));
-            return node?.Id;
+            foreach (var n in NodeConfigurations)
+            {
+                foreach (var device in n.DeviceConfigurations)
+                {
+                    foreach (var t in device.CommandTemplates)
+                    {
+                        if(t.Id == commandId)
+                            return n.Id;
+                    }
+
+                    foreach (var t in device.ReportTemplates)
+                    {
+                        if (t.Id == commandId)
+                            return n.Id;
+                    }
+                }
+            }
+            return null;
         }
 
         public IEnumerable<CommandTemplate> GetCommandTemplates()
@@ -96,34 +112,11 @@ namespace RIoT2.Net.Orchestrator.Services
                         Pages = []
                     };
                 }
-
-                updateNodeIdToCommandTemplates();
                 refreshDashboardTemplates();
             }
             catch (Exception e)
             {
                 _logger.LogError($"Could not read node configurations: {e.Message}");
-            }
-        }
-
-        private void updateNodeIdToCommandTemplates() 
-        {
-            if(_nodes == null || _nodes.Count == 0)
-                return;
-
-            foreach (var node in _nodes) 
-            {
-                if (node.DeviceConfigurations == null)
-                    continue;
-
-                foreach (var x in node.DeviceConfigurations) 
-                {
-                    if (x.CommandTemplates == null)
-                        continue;
-          
-                    foreach (var c in x.CommandTemplates) 
-                        c.NodeId = node.Id;
-                }
             }
         }
 
