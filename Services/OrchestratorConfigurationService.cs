@@ -23,7 +23,7 @@ namespace RIoT2.Net.Orchestrator.Services
         public OrchestratorConfiguration OrchestratorConfiguration { get { return _configuration; } }
         public List<NodeDeviceConfiguration> NodeConfigurations { get { return _nodes; } }
 
-        public string FindNodeId(string commandId)
+        public string FindNodeId(string id)
         {
             foreach (var n in NodeConfigurations)
             {
@@ -31,13 +31,13 @@ namespace RIoT2.Net.Orchestrator.Services
                 {
                     foreach (var t in device.CommandTemplates)
                     {
-                        if(t.Id == commandId)
+                        if(t.Id == id)
                             return n.Id;
                     }
 
                     foreach (var t in device.ReportTemplates)
                     {
-                        if (t.Id == commandId)
+                        if (t.Id == id)
                             return n.Id;
                     }
                 }

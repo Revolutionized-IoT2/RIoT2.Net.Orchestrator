@@ -165,19 +165,19 @@ namespace RIoT2.Net.Orchestrator.Controllers
                 {
                     foreach (var t in device.ReportTemplates)
                     {
-                        a.Add(new
+                        a.Add(new NodeReportTemplate()
                         {
                             NodeId = node.Id,
                             Node = node.Name,
                             DeviceId = device.Id,
                             Device = device.Name,
-                            FilterOptions = t.Filters,
-                            t.Name,
-                            t.Id,
-                            t.Type,
-                            t.Address,
-                            t.RefreshSchedule,
-                            t.MaintainHistory
+                            Filters = t.Filters,
+                            Id = t.Id,
+                            Name = t.Name,
+                            Address = t.Address,
+                            Type =  t.Type,
+                            RefreshSchedule = t.RefreshSchedule,
+                            MaintainHistory = t.MaintainHistory,
                         });
                     }
                 }
@@ -217,17 +217,17 @@ namespace RIoT2.Net.Orchestrator.Controllers
                 {
                     foreach (var t in device.CommandTemplates)
                     {
-                        a.Add(new
+                        a.Add(new NodeCommandTemplate()
                         {
                             NodeId = node.Id,
                             Node = node.Name,
                             DeviceId = device.Id,
                             Device = device.Name,
-                            t.Name,
-                            t.Id,
-                            t.Type,
-                            t.Address,
-                            t.Model
+                            Name = t.Name,
+                            Id = t.Id,
+                            Type = t.Type,
+                            Address = t.Address,
+                            Model = t.Model
                         });
                     }
                 }
