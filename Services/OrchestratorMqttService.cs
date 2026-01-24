@@ -125,7 +125,7 @@ namespace RIoT2.Net.Orchestrator.Services
                         var workflowNode = _onlineNodeService.OnlineNodes.FirstOrDefault(x => x.OnlineNodeSettings.IsOnline && x.OnlineNodeSettings.NodeType == NodeType.Workflow);
                         if (workflowNode != default)
                         {
-                            var url = workflowNode.OnlineNodeSettings.NodeBaseUrl + Constants.ApiWorkflowUrl.Replace("{id}", report.Id);
+                            var url = workflowNode.OnlineNodeSettings.NodeBaseUrl + Constants.ApiWorkflowTriggerUrl.Replace("{id}", report.Id);
                             await Web.PostAsync(url, report.ToJson());
                         }
                         else
