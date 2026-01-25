@@ -35,9 +35,8 @@ builder.Services.AddControllers()
     });
 
 //ConfigurationManager configuration = builder.Configuration;
-
-builder.Services.AddSingleton<IOnlineNodeService, OnlineNodeService>();
 builder.Services.AddSingleton<IOrchestratorConfigurationService, OrchestratorConfigurationService>();
+builder.Services.AddSingleton<IOnlineNodeService, OnlineNodeService>();
 builder.Services.AddSingleton<IRuleProcessorService, RuleProcessorService>();
 builder.Services.AddSingleton<IStoredObjectService, StoredObjectService>();
 builder.Services.AddSingleton<IFunctionService, FunctionService>();
