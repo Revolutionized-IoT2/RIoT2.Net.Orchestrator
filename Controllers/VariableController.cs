@@ -21,10 +21,9 @@ namespace RIoT2.Net.Orchestrator.Controllers
         /// <summary>
         /// Retrieves all available variable templates
         /// </summary>
-        /// <param name="id"></param>
         /// <returns></returns>
         [HttpGet("templates")]
-        public IActionResult GetVariableTemplates(string id)
+        public IActionResult GetVariableTemplates()
         {
             var a = new List<VariableTemplate>();
             foreach (var v in _storedObjectService.GetAll<Variable>())
@@ -43,6 +42,16 @@ namespace RIoT2.Net.Orchestrator.Controllers
                 });
             }
             return new OkObjectResult(a);
+        }
+
+        [HttpGet("{id}/value")]
+        public IActionResult GetVariableValue(string id)
+        {
+            var variable = _storedObjectService.GetAll<Variable>().FirstOrDefault(x => x.Id == id);
+            if (variable != default)
+                return new OkObjectResult(VariableDTO.ToVariableDTO(variable));
+
+            return new NotFoundResult();
         }
     }
 }
