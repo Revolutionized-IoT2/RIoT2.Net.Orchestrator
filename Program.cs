@@ -60,14 +60,6 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 IHostApplicationLifetime lifetime = app.Lifetime;
-lifetime.ApplicationStopping.Register(onShutdown);
-
-void onShutdown() //this code is called when the application stops
-{
-    var mqttService = app.Services.GetRequiredService<MqttBackgroundService>();
-    mqttService.StopAsync(default).Wait();
-}
-
 lifetime.ApplicationStarted.Register(() =>
 {
     foreach (var variable in app.Services.GetService<IStoredObjectService>().GetAll<Variable>())
