@@ -13,7 +13,7 @@ namespace RIoT2.Net.Orchestrator.Services
         private IStoredObjectService _storedObjectService;
         private IEnumerable<Variable> _variables;
 
-        public OrchestratorConfigurationService(IConfiguration configuration, IStoredObjectService storedObjectService, ILogger<OrchestratorConfigurationService> logger) 
+        public OrchestratorConfigurationService(IStoredObjectService storedObjectService, ILogger<OrchestratorConfigurationService> logger) 
         {
             _logger = logger;
             _storedObjectService = storedObjectService;
@@ -82,7 +82,7 @@ namespace RIoT2.Net.Orchestrator.Services
             _configuration = new OrchestratorConfiguration()
             {
                 Id = Environment.GetEnvironmentVariable("RIOT2_ORCHESTRATOR_ID"),
-                BaseUrl = Environment.GetEnvironmentVariable("RIOT2_ORCHESTRATOR_URL"),
+                Url = Environment.GetEnvironmentVariable("RIOT2_ORCHESTRATOR_URL"),
                 UseExtWorkflowEngine = Environment.GetEnvironmentVariable("RIOT2_USE_EXTERNAL_WORKFLOW_ENGINE") == "1",
                 Mqtt = new MqttConfiguration() 
                 {

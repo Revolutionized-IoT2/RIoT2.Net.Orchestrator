@@ -187,7 +187,7 @@ namespace RIoT2.Net.Orchestrator.Services
         {
             return new ConfigurationCommand()
             {
-                ApiBaseUrl = _configuration.OrchestratorConfiguration.BaseUrl
+                ApiBaseUrl = _configuration.OrchestratorConfiguration.Url
             };
         }
 
