@@ -115,7 +115,7 @@ namespace RIoT2.Net.Orchestrator.Services
             return id;
         }
 
-        private void delete<T>(string id, bool persistent = true)
+        private void delete<T>(string id = "", bool persistent = true)
         {
             var t = getTypeString(typeof(T));
             if (!_objects.ContainsKey(t))
@@ -125,12 +125,27 @@ namespace RIoT2.Net.Orchestrator.Services
             if (objs == null)
                 return;
 
-            var objToDelete = objs.FirstOrDefault(x => x.Id == id);
-            if (objToDelete != null)
-                objs.Remove(objToDelete);
-
+            if (id == "") //delete everything of type T
+            {
+                _objects.Remove(t);
+            }
+            else //just delete the one with the id
+            {
+                var objToDelete = objs.FirstOrDefault(x => x.Id == id);
+                if (objToDelete != null)
+                    objs.Remove(objToDelete);
+            }
+           
             if (persistent)
             {
+                if(id== "") //delete everything of type T
+                {
+                    DirectoryInfo directory = new DirectoryInfo(Path.Combine(_storedObjectsFolder, t));
+                    if (directory.Exists)
+                        directory.Delete(true);
+                    return;
+                }
+
                 var fullFileName = Path.Combine(_storedObjectsFolder, t, id + ".json");
 
                 FileInfo ruleFileInfo = new FileInfo(fullFileName);
@@ -179,6 +194,17 @@ namespace RIoT2.Net.Orchestrator.Services
         private string getTypeString(Type type) 
         {
             return type.FullName.Split('.').Last();
+        }
+
+        public T Get<T>()
+        {
+            return GetAll<T>().FirstOrDefault();
+        }
+
+        public void DeleteAll<T>()
+        {
+            delete<T>();
+            StoredObjectEvent?.Invoke(typeof(T), null, OperationType.Deleted);
         }
     }
 }
