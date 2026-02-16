@@ -4,8 +4,21 @@ using RIoT2.Core.Services;
 using RIoT2.Net.Orchestrator.CustomJsonSettings;
 using RIoT2.Net.Orchestrator.Services;
 using System.Text.Json;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var serilog = new LoggerConfiguration()
+   .WriteTo.Console()
+   .WriteTo.File("Logs/RIoT2.log", rollingInterval: RollingInterval.Day, outputTemplate: "{Timestamp:dd.MM.yyyy HH:mm:ss.fff} [{Level}] {Message:lj}{NewLine}{Exception}", shared: true)
+   .CreateLogger();
+
+ILoggerFactory logger = LoggerFactory.Create(log =>
+{
+    log.AddSerilog(serilog);
+});
+
+Microsoft.Extensions.Logging.ILogger orchestratorLogger = logger.CreateLogger("RIoT2.Net.Orchestrator");
 
 // Add services to the container.
 builder.Services.AddControllers()
@@ -35,6 +48,7 @@ builder.Services.AddControllers()
     });
 
 //ConfigurationManager configuration = builder.Configuration;
+builder.Services.AddSingleton<Microsoft.Extensions.Logging.ILogger>(orchestratorLogger);
 builder.Services.AddSingleton<IOrchestratorConfigurationService, OrchestratorConfigurationService>();
 builder.Services.AddSingleton<IOnlineNodeService, OnlineNodeService>();
 builder.Services.AddSingleton<IRuleProcessorService, RuleProcessorService>();
@@ -58,6 +72,8 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+orchestratorLogger.LogInformation($"Services initialized. {app.Services.GetService<IOrchestratorConfigurationService>().OrchestratorConfiguration.Manifest?.Name} - {app.Services.GetService<IOrchestratorConfigurationService>().OrchestratorConfiguration.Manifest?.Version}");
 
 IHostApplicationLifetime lifetime = app.Lifetime;
 lifetime.ApplicationStarted.Register(() =>
