@@ -31,22 +31,21 @@ namespace RIoT2.Net.Orchestrator.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetNodes()
+        public async Task<IActionResult> GetNodesAsync()
         {
             List<Node> nodes = new List<Node>();
-            var onlineNodes = _onlineNodeService.OnlineNodes.Select(x => x.Id).ToList();
-
             foreach (var conf in _configuration.NodeConfigurations) 
             {
-                nodes.Add(new Node() { 
+                var onlineNode = _onlineNodeService.OnlineNodes.FirstOrDefault(x => x.Id == conf.Id);
+                nodes.Add(new Node() {
                     Id = conf.Id,
                     Name = conf.Name,
-                    IsOnline = onlineNodes.Contains(conf.Id),
-                    DeviceStatuses = _onlineNodeService.LoadDeviceStatusFromNodeAsync(conf.Id).Result
+                    IsOnline = onlineNode != null,
+                    DeviceStatuses = await _onlineNodeService.LoadDeviceStatusFromNodeAsync(conf.Id),
+                    Manifest = onlineNode?.OnlineNodeSettings.Manifest,
+                    PluginManifest = onlineNode?.OnlineNodeSettings.PluginManifest
                 });
             }
-
-            //TODO load all node statuses at the same time
 
             return new OkObjectResult(nodes);
         }
