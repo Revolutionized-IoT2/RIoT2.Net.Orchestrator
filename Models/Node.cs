@@ -8,5 +8,7 @@ namespace RIoT2.Net.Orchestrator.Models
         public string Name { get; set; }
         public bool IsOnline { get; set; }
         public List<DeviceStatus> DeviceStatuses { get; set; }
+        public PackageManifest Manifest { get; set; }
+        public PackageManifest PluginManifest { get; set; }
     }
 }
