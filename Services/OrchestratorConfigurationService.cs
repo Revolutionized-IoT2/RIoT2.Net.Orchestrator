@@ -176,11 +176,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 if (String.IsNullOrEmpty(dev.Id))
                     dev.Id = Guid.NewGuid().ToString();
 
-                if (dev.ReportTemplates == null) 
-                {
-                    dev.ReportTemplates = [];
-                }
-                else 
+                if (dev.ReportTemplates != null)
                 {
                     foreach (var r in dev.ReportTemplates)
                     {
@@ -189,13 +185,9 @@ namespace RIoT2.Net.Orchestrator.Services
                     }
                 }
 
-                if (dev.CommandTemplates == null)
+                if (dev.CommandTemplates != null)
                 {
-                    dev.CommandTemplates = [];
-                }
-                else 
-                {
-                    foreach (var c in dev.CommandTemplates ?? Enumerable.Empty<CommandTemplate>())
+                    foreach (var c in dev.CommandTemplates)
                     {
                         if (String.IsNullOrEmpty(c.Id))
                             c.Id = Guid.NewGuid().ToString();
@@ -203,7 +195,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 }
             }
 
-            _storedObjectService.Save(configuration);
+            _storedObjectService.Save(configuration, true, false, true);
             _nodes = _storedObjectService.GetAll<NodeDeviceConfiguration>().ToList();
             return configuration.Id;
         }

@@ -90,12 +90,36 @@ namespace RIoT2.Net.Orchestrator.Controllers
             return new OkResult();
         }
 
+        [HttpPost("checkplugin")]
+        public async Task<IActionResult> CheckPluging([FromBody] PluginFile plugin)
+        {
+            try
+            {
+               if(plugin == null)
+                   return new BadRequestObjectResult("Plugin object cannot be null");
+
+                if (String.IsNullOrEmpty(plugin.Url))
+                    return new BadRequestObjectResult("Plugin Url must be provided");
+
+                var metadata = await Web.GetUrlMetadata(plugin.Url);
+
+                if (metadata == null)
+                        return new BadRequestObjectResult("Plugin Url is not valid or accessible");
+    
+                plugin.Name = metadata?.ContentDisposition?.FileName ?? "";
+                return new OkObjectResult(plugin);
+            }
+            catch (Exception x)
+            {
+                return StatusCode(500, x.Message);
+            }
+        }
+
         [HttpPost("configuration")]
         public IActionResult SaveConfiguration([FromBody] System.Text.Json.JsonElement json)
         {
             try
             {
-                //TODO TESTAA TÄMÄ!!!!
                 var id = _configuration.SaveNodeConfiguration(json.ToString());
                 if (String.IsNullOrEmpty(id))
                     return new BadRequestResult();

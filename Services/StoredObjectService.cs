@@ -44,7 +44,7 @@ namespace RIoT2.Net.Orchestrator.Services
             return objs.OfType<T>();
         }
 
-        public string Save<T>(T obj, bool persistent = true, bool autoTypeNameHandling = false)
+        public string Save<T>(T obj, bool persistent = true, bool autoTypeNameHandling = false, bool includeNulls = false)
         {
             var id = Guid.NewGuid().ToString();
             var t = getTypeString(typeof(T));
@@ -52,7 +52,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 (obj as dynamic).Id = id;
             else
                 id = (obj as dynamic).Id;
-            var json = Json.SerializeAutoTypeNameHandling(obj, autoTypeNameHandling);
+            var json = Json.SerializeAutoTypeNameHandling(obj, autoTypeNameHandling, includeNulls);
             var fullFileName = Path.Combine(_storedObjectsFolder, t, id + ".json");
             DirectoryInfo directory = new DirectoryInfo(Path.Combine(_storedObjectsFolder, t));
 
@@ -63,7 +63,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 var currentObject = objs.FirstOrDefault(x => x.Id == id);
                 if (currentObject != null) 
                 {
-                    var currentJson = Json.SerializeAutoTypeNameHandling(currentObject, autoTypeNameHandling);
+                    var currentJson = Json.SerializeAutoTypeNameHandling(currentObject, autoTypeNameHandling, includeNulls);
                     if (currentJson == json) 
                     {
                         _logger.LogInformation("No change in existing object. Object not Saved.");
