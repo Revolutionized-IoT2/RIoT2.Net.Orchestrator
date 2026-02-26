@@ -6,6 +6,7 @@ using RIoT2.Core.Utils;
 using RIoT2.Core.Models;
 using RIoT2.Core;
 using RIoT2.Net.Orchestrator.Models;
+using Quartz;
 
 namespace RIoT2.Net.Orchestrator.Controllers
 {
@@ -66,6 +67,17 @@ namespace RIoT2.Net.Orchestrator.Controllers
 
 
             return new OkObjectResult(nodes);
+        }
+
+        [HttpPost("validatecron")]
+        public IActionResult ValidateCron([FromBody] CronValidationResult cron)
+        {
+            bool isValid = CronExpression.IsValidExpression(cron.Expression);
+            if (isValid)
+                cron.Summary = new CronExpression(cron.Expression).GetExpressionSummary();
+
+            cron.IsValid = isValid;
+            return new OkObjectResult(cron);
         }
 
         [HttpGet("{id}/configuration")]
