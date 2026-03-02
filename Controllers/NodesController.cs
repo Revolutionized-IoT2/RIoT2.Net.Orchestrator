@@ -7,6 +7,7 @@ using RIoT2.Core.Models;
 using RIoT2.Core;
 using RIoT2.Net.Orchestrator.Models;
 using Quartz;
+using System.Net.Http.Headers;
 
 namespace RIoT2.Net.Orchestrator.Controllers
 {
@@ -61,7 +62,11 @@ namespace RIoT2.Net.Orchestrator.Controllers
                 Name = String.IsNullOrEmpty(x.OnlineNodeSettings.Name) ? allNodes?.FirstOrDefault(a => a.Id == x.Id)?.Name : x.OnlineNodeSettings.Name,
                 HasDevices = allNodes?.FirstOrDefault(a => a.Id == x.Id)?.DeviceConfigurations?.Count > 0,
                 x.Id,
-                x.OnlineNodeSettings.IsOnline
+                x.OnlineNodeSettings.IsOnline,
+                x.OnlineNodeSettings.NodeType,
+                x.OnlineNodeSettings.Manifest,
+                x.OnlineNodeSettings.PluginManifest,
+                x.OnlineNodeSettings.NodeBaseUrl
             }).ToList();
 
 
@@ -75,6 +80,9 @@ namespace RIoT2.Net.Orchestrator.Controllers
             bool isValid = CronExpression.IsValidExpression(cron.Expression);
             if (isValid)
                 cron.Summary = new CronExpression(cron.Expression).GetExpressionSummary();
+
+            if (!string.IsNullOrEmpty(cron.Summary))
+                cron.Summary = cron.Summary.Replace("\n", "<br />");
 
             cron.IsValid = isValid;
             return new OkObjectResult(cron);
@@ -107,18 +115,42 @@ namespace RIoT2.Net.Orchestrator.Controllers
         {
             try
             {
-               if(plugin == null)
-                   return new BadRequestObjectResult("Plugin object cannot be null");
+                if (plugin == null) 
+                {
+                    plugin.ErrorMessage = "Plugin object cannot be null";
+                    return new OkObjectResult(plugin);
+                }
 
-                if (String.IsNullOrEmpty(plugin.Url))
-                    return new BadRequestObjectResult("Plugin Url must be provided");
+                if (String.IsNullOrEmpty(plugin.Url)) 
+                {
+                    plugin.ErrorMessage = "Plugin Url must be provided";
+                    return new OkObjectResult(plugin);
+                }
 
-                var metadata = await Web.GetUrlMetadata(plugin.Url);
+                if (!plugin.Url.ToLower().StartsWith("http://") && !plugin.Url.ToLower().StartsWith("https://"))
+                {
+                    plugin.ErrorMessage = "Not a valid url";
+                    return new OkObjectResult(plugin);
+                }
 
-                if (metadata == null)
-                        return new BadRequestObjectResult("Plugin Url is not valid or accessible");
+                HttpContentHeaders metadata;
+                try
+                {
+                    metadata = await Web.GetUrlMetadata(plugin.Url);
+                }
+                catch (Exception x) 
+                {
+                    plugin.ErrorMessage = x.Message;
+                    return new OkObjectResult(plugin);
+                }
+
+                if (metadata == null) 
+                {
+                    plugin.ErrorMessage = "Plugin Url is not valid or accessible";
+                    return new OkObjectResult(plugin);
+                }
     
-                plugin.Name = metadata?.ContentDisposition?.FileName ?? "";
+                plugin.Name = metadata.ContentDisposition?.FileName ?? "";
                 return new OkObjectResult(plugin);
             }
             catch (Exception x)
@@ -198,6 +230,9 @@ namespace RIoT2.Net.Orchestrator.Controllers
             {
                 foreach (var device in node.DeviceConfigurations) 
                 {
+                    if (device.ReportTemplates == null)
+                        continue;
+
                     foreach (var t in device.ReportTemplates)
                     {
                         a.Add(new NodeReportTemplate()
@@ -250,6 +285,9 @@ namespace RIoT2.Net.Orchestrator.Controllers
             {
                 foreach (var device in node.DeviceConfigurations)
                 {
+                    if (device.CommandTemplates == null)
+                        continue;
+
                     foreach (var t in device.CommandTemplates)
                     {
                         a.Add(new NodeCommandTemplate()

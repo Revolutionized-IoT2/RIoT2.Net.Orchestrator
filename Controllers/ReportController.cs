@@ -52,6 +52,9 @@ namespace RIoT2.Net.Orchestrator.Controllers
             {
                 foreach (var device in node.DeviceConfigurations)
                 {
+                    if(device.ReportTemplates == null)
+                        continue;
+
                     foreach (var t in device.ReportTemplates)
                     {
                         a.Add(new NodeReportTemplate
