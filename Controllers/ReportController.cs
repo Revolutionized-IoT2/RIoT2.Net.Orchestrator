@@ -69,7 +69,6 @@ namespace RIoT2.Net.Orchestrator.Controllers
                             Type = t.Type,
                             Address = t.Address,
                             Model = t.Model,
-                            RefreshSchedule = t.RefreshSchedule,
                             MaintainHistory = t.MaintainHistory
                         });
                     }
