@@ -98,8 +98,11 @@ namespace RIoT2.Net.Orchestrator.Services
             var results = new Dictionary<string, List<DeviceConfiguration>>();
 
             Dictionary<string, Task<List<DeviceConfiguration>>> requests = new Dictionary<string, Task<List<DeviceConfiguration>>>();
-            foreach (var onlineNode in _onlineNodes)
-                requests.Add(onlineNode.Id, LoadDeviceConfigurationTemplateAsync(onlineNode.Id));
+            foreach (var onlineNode in _onlineNodes) 
+            {
+                if(onlineNode.OnlineNodeSettings.NodeType == NodeType.Device)
+                    requests.Add(onlineNode.Id, LoadDeviceConfigurationTemplateAsync(onlineNode.Id));
+            }
 
             if(requests.Count == 0)
                 return results;
