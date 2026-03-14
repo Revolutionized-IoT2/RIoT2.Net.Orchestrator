@@ -1,13 +1,14 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using RIoT2.Net.Orchestrator.Services;
-using System.Text;
-using RIoT2.Core.Interfaces.Services;
-using RIoT2.Core.Utils;
-using RIoT2.Core.Models;
-using RIoT2.Core;
-using RIoT2.Net.Orchestrator.Models;
 using Quartz;
+using RIoT2.Core;
+using RIoT2.Core.Interfaces.Services;
+using RIoT2.Core.Models;
+using RIoT2.Core.Utils;
+using RIoT2.Net.Orchestrator.Models;
+using RIoT2.Net.Orchestrator.Services;
 using System.Net.Http.Headers;
+using System.Text;
+using System.Xml.Linq;
 
 namespace RIoT2.Net.Orchestrator.Controllers
 {
@@ -50,6 +51,17 @@ namespace RIoT2.Net.Orchestrator.Controllers
             }
 
             return new OkObjectResult(nodes);
+        }
+
+        [HttpGet("{id}/devices/status")]
+        public async Task<IActionResult> GetNodeDevicesStatusAsync(string id)
+        {
+            var node = _onlineNodeService.OnlineNodes.FirstOrDefault(x => x.Id == id);
+            if(node == null)
+                return new OkResult();
+
+            var statuses = await _onlineNodeService.LoadDeviceStatusFromNodeAsync(id);
+            return new OkObjectResult(statuses);
         }
 
         [HttpGet("online")]
@@ -324,7 +336,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
             return new OkObjectResult(a);
         }
 
-        [HttpGet("device/{id}/template")]
+        [HttpGet("{id}/device/templates")]
         public async Task<IActionResult> GetOnlineDeviceConfigurationTemplatates(string id)
         {
             var template = await _onlineNodeService.LoadDeviceConfigurationTemplateAsync(id);
