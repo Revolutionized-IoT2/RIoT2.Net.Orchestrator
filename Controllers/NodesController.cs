@@ -208,6 +208,8 @@ namespace RIoT2.Net.Orchestrator.Controllers
 
                         //templates have random ids, so we need to find template with matching class
                         var reportConfiguration = _configuration.NodeConfigurations.FirstOrDefault(x => x.Id == node)?.DeviceConfigurations.FirstOrDefault(x => x.ReportTemplates != null && x.ReportTemplates.Any(t => t.Id == id))?.ReportTemplates.FirstOrDefault(x => x.Id == id);
+                        if(reportConfiguration == null)
+                            continue;
 
                         var reportTemplate = device.ReportTemplates.FirstOrDefault(x => x.Address == reportConfiguration.Address);
                         if(reportTemplate != null)
