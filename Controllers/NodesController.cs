@@ -192,14 +192,24 @@ namespace RIoT2.Net.Orchestrator.Controllers
         public IActionResult GetReportState(string type, string id)
         {
             var report = _messageStateService.Reports.FirstOrDefault(x => x.Id == id);
-            if (report == null) //fetch from 
+            if (report == null) //if there are no report, try fetching directly from online node
             {
                 var templates = _onlineNodeService.LoadDeviceConfigurationTemplatesAsync().Result;
                 foreach (var node in templates.Keys) 
                 {
-                    foreach (var device in templates[node]) 
+                    var confs = templates[node];
+                    if (confs == null)
+                        continue;
+
+                    foreach (var device in confs) 
                     {
-                        var reportTemplate = device.ReportTemplates.FirstOrDefault(x => x.Id == id);
+                        if (device.ReportTemplates == null)
+                            continue;
+
+                        //templates have random ids, so we need to find template with matching class
+                        var reportConfiguration = _configuration.NodeConfigurations.FirstOrDefault(x => x.Id == node)?.DeviceConfigurations.FirstOrDefault(x => x.ReportTemplates != null && x.ReportTemplates.Any(t => t.Id == id))?.ReportTemplates.FirstOrDefault(x => x.Id == id);
+
+                        var reportTemplate = device.ReportTemplates.FirstOrDefault(x => x.Address == reportConfiguration.Address);
                         if(reportTemplate != null)
                             return Content(Json.Serialize(reportTemplate), "application/json");
                             //return new OkObjectResult(reportTemplate);
