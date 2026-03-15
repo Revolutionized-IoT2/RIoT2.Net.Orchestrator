@@ -1,4 +1,5 @@
-﻿using RIoT2.Core.Interfaces.Services;
+﻿using Microsoft.VisualBasic;
+using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Models;
 using RIoT2.Core.Utils;
 
@@ -29,13 +30,13 @@ namespace RIoT2.Net.Orchestrator.Services
             {
                 foreach (var device in n.DeviceConfigurations)
                 {
-                    foreach (var t in device.CommandTemplates)
+                    foreach (var t in device.CommandTemplates ?? [])
                     {
                         if(t.Id == id)
                             return n.Id;
                     }
 
-                    foreach (var t in device.ReportTemplates)
+                    foreach (var t in device.ReportTemplates ?? [])
                     {
                         if (t.Id == id)
                             return n.Id;
