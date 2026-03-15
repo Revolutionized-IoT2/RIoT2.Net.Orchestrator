@@ -442,7 +442,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
             {
                 foreach (var device in node.DeviceConfigurations) 
                 {
-                    foreach (var commandTemplate in device.CommandTemplates) 
+                    foreach (var commandTemplate in device.CommandTemplates ?? []) 
                     {
                         var latestCommand = _messageStateService.Commands.FirstOrDefault(x => x.Id == commandTemplate.Id);
                         if (latestCommand != null)
