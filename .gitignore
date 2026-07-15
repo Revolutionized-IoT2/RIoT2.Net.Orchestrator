@@ -6,8 +6,7 @@
 /obj
 *.user
 /bin/Debug/net8.0
+/bin/Debug/net9.0
 /StoredObjects/*
 /Properties/launchSettings.json
 /Logs
-/bin/Debug/net9.0
-/bin/Debug/net9.0/RIoT2.Net.Orchestrator.exe
