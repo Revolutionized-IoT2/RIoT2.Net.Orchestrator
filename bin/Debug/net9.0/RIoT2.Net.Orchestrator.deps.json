@@ -8,7 +8,7 @@
     ".NETCoreApp,Version=v9.0": {
       "RIoT2.Net.Orchestrator/1.0.0": {
         "dependencies": {
-          "RIoT2.Core": "0.1.36",
+          "RIoT2.Core": "0.1.37",
           "Serilog.AspNetCore": "10.0.0",
           "Serilog.Sinks.File": "7.0.0"
         },
@@ -223,7 +223,7 @@
           }
         }
       },
-      "RIoT2.Core/0.1.36": {
+      "RIoT2.Core/0.1.37": {
         "dependencies": {
           "CoreCLR-NCalc": "3.1.253",
           "MQTTnet": "4.3.7.1207",
@@ -540,12 +540,12 @@
       "path": "quartz/3.13.1",
       "hashPath": "quartz.3.13.1.nupkg.sha512"
     },
-    "RIoT2.Core/0.1.36": {
+    "RIoT2.Core/0.1.37": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-hDdvJKCyQto0H2EnrgMReu8YIfv44Stu3QlJQuEUu1P8ohx5bvfm2D4AOxT7mTKCBZtp84C9YSIPFzhBSbB9Tw==",
-      "path": "riot2.core/0.1.36",
-      "hashPath": "riot2.core.0.1.36.nupkg.sha512"
+      "sha512": "sha512-05Yu8XEltY/8vm5XuNqVZgzTkD9298RtGDOV/7owiXJ7Mv3arafmZuci9Ef1NnyMRTV6I8E8E0icOxUo4bz+hQ==",
+      "path": "riot2.core/0.1.37",
+      "hashPath": "riot2.core.0.1.37.nupkg.sha512"
     },
     "Serilog/4.3.0": {
       "type": "package",

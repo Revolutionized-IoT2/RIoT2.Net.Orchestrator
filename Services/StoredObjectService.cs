@@ -1,18 +1,24 @@
 ﻿using RIoT2.Core;
 using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Utils;
+using RIoT2.Net.Orchestrator.Services.Persistence;
 
 namespace RIoT2.Net.Orchestrator.Services
 {
     public class StoredObjectService : IStoredObjectService
     {
         private ILogger _logger;
-        private Dictionary<string, List<dynamic>>  _objects;
-        private string _storedObjectsFolder;
+        private Dictionary<string, List<dynamic>> _objects;
+        private readonly IObjectStore _store;
 
-        public StoredObjectService(ILogger<StoredObjectService> logger, IWebHostEnvironment env) 
+        // Guards all access to _objects and the associated persistence calls.
+        // Compound check-then-act sequences (save/delete/load) require a single lock
+        // to remain atomic.
+        private readonly object _sync = new object();
+
+        public StoredObjectService(IObjectStore store, ILogger<StoredObjectService> logger)
         {
-            _storedObjectsFolder = Path.Combine(env.ContentRootPath, "StoredObjects");
+            _store = store;
             _objects = new Dictionary<string, List<dynamic>>();
             _logger = logger;
         }
@@ -21,100 +27,107 @@ namespace RIoT2.Net.Orchestrator.Services
 
         public void Delete<T>(string id, bool persistent = true)
         {
-            delete<T>(id, persistent);
+            lock (_sync)
+            {
+                delete<T>(id, persistent);
+            }
             StoredObjectEvent?.Invoke(typeof(T), id, OperationType.Deleted);
         }
 
         public IEnumerable<T> GetAll<T>()
         {
-            var t = getTypeString(typeof(T));
-            if (!_objects.ContainsKey(t)) 
+            lock (_sync)
             {
-                load<T>();
+                var t = getTypeString(typeof(T));
                 if (!_objects.ContainsKey(t))
+                {
+                    load<T>();
+                    if (!_objects.ContainsKey(t))
+                        return [];
+                }
+
+                var objs = _objects[t];
+                if (objs == null)
                     return [];
+
+                // Materialize a snapshot inside the lock so callers can enumerate safely.
+                return objs.OfType<T>().ToList();
             }
-
-            var objs = _objects[t];
-            if (objs == null)
-                return [];
-
-            //TODO uncomment if needed
-            //StoredObjectEvent?.Invoke(typeof(T), objs, OperationType.Read);
-            return objs.OfType<T>();
         }
 
         public string Save<T>(T obj, bool persistent = true, bool autoTypeNameHandling = false, bool includeNulls = false)
         {
-            var id = Guid.NewGuid().ToString();
+            OperationType op;
+            string id;
 
-            var t = getTypeString(typeof(T));
-            if (String.IsNullOrEmpty((obj as dynamic).Id))
-                (obj as dynamic).Id = id;
-            else
-                id = (obj as dynamic).Id;
-
-            var json = Json.SerializeAutoTypeNameHandling(obj, autoTypeNameHandling, includeNulls);
-            var fullFileName = Path.Combine(_storedObjectsFolder, t, id + ".json");
-            DirectoryInfo directory = new DirectoryInfo(Path.Combine(_storedObjectsFolder, t));
-
-            //Check if current exists -> if does and no change, do nothing
-            var objs = _objects[t];
-            if (objs != null)
+            lock (_sync)
             {
-                var currentObject = objs.FirstOrDefault(x => x.Id == id);
-                if (currentObject != null) 
-                {
-                    var currentJson = Json.SerializeAutoTypeNameHandling(currentObject, autoTypeNameHandling, includeNulls);
-                    if (currentJson == json) 
-                    {
-                        _logger.LogInformation("No change in existing object. Object not Saved.");
-                        StoredObjectEvent?.Invoke(typeof(T), obj, OperationType.NoChange);
-                        return id;
-                    }
-                }
-            }
-               
-            if (persistent)
-            {
-                if (!directory.Exists)
-                {
-                    directory.Create();
-                    _logger.LogWarning($"Saving stored objects. Folder {directory.FullName} did not exist. Directory Created.");
-                }
-                else 
-                {
-                    delete<T>(id, persistent);
-                }
+                id = Guid.NewGuid().ToString();
 
-                try
+                var t = getTypeString(typeof(T));
+                if (String.IsNullOrEmpty((obj as dynamic).Id))
+                    (obj as dynamic).Id = id;
+                else
+                    id = (obj as dynamic).Id;
+
+                var json = Json.SerializeAutoTypeNameHandling(obj, autoTypeNameHandling, includeNulls);
+
+                //Check if current exists -> if does and no change, do nothing
+                _objects.TryGetValue(t, out var objs);
+                if (objs != null)
                 {
-                    using (var f = File.Create(fullFileName))
+                    var currentObject = objs.FirstOrDefault(x => x.Id == id);
+                    if (currentObject != null)
                     {
-                        using (StreamWriter r = new StreamWriter(f))
+                        var currentJson = Json.SerializeAutoTypeNameHandling(currentObject, autoTypeNameHandling, includeNulls);
+                        if (currentJson == json)
                         {
-                            r.Write(json);
+                            _logger.LogInformation("No change in existing object. Object not Saved.");
+                            StoredObjectEvent?.Invoke(typeof(T), obj, OperationType.NoChange);
+                            return id;
                         }
                     }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"Could not save {t} with id {id}", id);
-                    return null;
-                }
-            }
 
-            var op = OperationType.Created;
-            if (_objects.ContainsKey(t)) 
-            {
-                _objects[t].Add(obj);
-                op = OperationType.Updated;
+                if (persistent)
+                {
+                    // Overwrite semantics: remove any existing durable copy first.
+                    _store.Delete(t, id);
+
+                    try
+                    {
+                        _store.Write(t, id, json);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Could not save {Type} with id {Id}", t, id);
+                        return null;
+                    }
+                }
+
+                op = OperationType.Created;
+                if (_objects.ContainsKey(t))
+                {
+                    _objects[t].Add(obj);
+                    op = OperationType.Updated;
+                }
+                else
+                    _objects.Add(t, new List<dynamic>() { obj });
             }
-            else
-                _objects.Add(t, new List<dynamic>() { obj });
 
             StoredObjectEvent?.Invoke(typeof(T), obj, op);
             return id;
+        }
+
+        public T Get<T>()
+        {
+            return GetAll<T>().FirstOrDefault();
+        }
+
+        public void DeleteAll<T>()
+        {
+            delete<T>();
+            StoredObjectEvent?.Invoke(typeof(T), null, OperationType.Deleted);
         }
 
         private void delete<T>(string id = "", bool persistent = true)
@@ -137,50 +150,25 @@ namespace RIoT2.Net.Orchestrator.Services
                 if (objToDelete != null)
                     objs.Remove(objToDelete);
             }
-           
+
             if (persistent)
             {
-                if(id== "") //delete everything of type T
-                {
-                    DirectoryInfo directory = new DirectoryInfo(Path.Combine(_storedObjectsFolder, t));
-                    if (directory.Exists)
-                        directory.Delete(true);
-                    return;
-                }
-
-                var fullFileName = Path.Combine(_storedObjectsFolder, t, id + ".json");
-
-                FileInfo ruleFileInfo = new FileInfo(fullFileName);
-                if (ruleFileInfo.Exists)
-                    ruleFileInfo.Delete();
+                if (id == "") //delete everything of type T
+                    _store.DeleteAll(t);
+                else
+                    _store.Delete(t, id);
             }
         }
 
-        private void load<T>() 
+        private void load<T>()
         {
             var t = getTypeString(typeof(T));
             var objList = new List<dynamic>();
 
-            DirectoryInfo directory = new DirectoryInfo(Path.Combine(_storedObjectsFolder, t));
-            if (!directory.Exists)
-            {
-                directory.Create();
-                _logger.LogWarning($"Loading stored objects. Folder {directory.FullName} did not exist. Directory Created.");
-            }
-
             try
             {
-                foreach (var file in directory.EnumerateFiles("*.json"))
-                {
-                    using (var fileStream = file.OpenRead())
-                    {
-                        using (StreamReader reader = new StreamReader(fileStream))
-                        {
-                            string json = reader.ReadToEnd();
-                            objList.Add(Json.DeserializeAutoTypeNameHandling<T>(json));
-                        }
-                    }
-                }
+                foreach (var json in _store.ReadAll(t))
+                    objList.Add(Json.DeserializeAutoTypeNameHandling<T>(json));
 
                 if (_objects.ContainsKey(t))
                     _objects[t] = objList;
@@ -189,24 +177,13 @@ namespace RIoT2.Net.Orchestrator.Services
             }
             catch (Exception x)
             {
-                _logger.LogError("Could not load objects {x.Message}", x.Message);
+                _logger.LogError("Could not load objects {Message}", x.Message);
             }
         }
 
-        private string getTypeString(Type type) 
+        private string getTypeString(Type type)
         {
             return type.FullName.Split('.').Last();
-        }
-
-        public T Get<T>()
-        {
-            return GetAll<T>().FirstOrDefault();
-        }
-
-        public void DeleteAll<T>()
-        {
-            delete<T>();
-            StoredObjectEvent?.Invoke(typeof(T), null, OperationType.Deleted);
         }
     }
 }
