@@ -3,6 +3,7 @@ using RIoT2.Core.Models;
 using RIoT2.Core.Services;
 using RIoT2.Net.Orchestrator.CustomJsonSettings;
 using RIoT2.Net.Orchestrator.Services;
+using RIoT2.Net.Orchestrator.Services.Persistence;
 using System.Text.Json;
 using Serilog;
 
@@ -47,8 +48,8 @@ builder.Services.AddControllers()
         o.JsonSerializerOptions.Converters.Add(new JObjectConverter());
     });
 
-//ConfigurationManager configuration = builder.Configuration;
 builder.Services.AddSingleton<Microsoft.Extensions.Logging.ILogger>(orchestratorLogger);
+builder.Services.AddSingleton<IObjectStore, FileObjectStore>();
 builder.Services.AddSingleton<IOrchestratorConfigurationService, OrchestratorConfigurationService>();
 builder.Services.AddSingleton<IOnlineNodeService, OnlineNodeService>();
 builder.Services.AddSingleton<IRuleProcessorService, RuleProcessorService>();

@@ -1,4 +1,5 @@
 ﻿using System.Runtime.InteropServices;
+using System.Threading.Channels;
 using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Utils;
 using RIoT2.Core;
@@ -14,10 +15,15 @@ namespace RIoT2.Net.Orchestrator.Services
         private readonly IMessageStateService _deviceStateService;
         private readonly IStoredObjectService _ruleManagementService;
         private readonly IOnlineNodeService _onlineNodeService;
-        private readonly ILogger _logger; 
+        private readonly ILogger _logger;
 
         private string _reportTopic;
         private string _nodeOnlineTopic;
+
+        // Bounded queue decouples MQTT callback threads / event handlers from processing.
+        private readonly Channel<Func<Task>> _workQueue;
+        private readonly CancellationTokenSource _cts;
+        private readonly Task _consumerTask;
 
         public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IRuleProcessorService workflowService, IMessageStateService deviceStateService, IStoredObjectService ruleManagementService, IOnlineNodeService onlineNodeService, ILogger<OrchestratorMqttService> logger)
         {
@@ -36,7 +42,45 @@ namespace RIoT2.Net.Orchestrator.Services
                 _configuration.OrchestratorConfiguration.Mqtt.Username,
                 _configuration.OrchestratorConfiguration.Mqtt.Password);
 
+            _workQueue = Channel.CreateBounded<Func<Task>>(new BoundedChannelOptions(1000)
+            {
+                FullMode = BoundedChannelFullMode.Wait,
+                SingleReader = true,
+                SingleWriter = false
+            });
+            _cts = new CancellationTokenSource();
+            _consumerTask = Task.Run(() => ProcessQueueAsync(_cts.Token));
+
             _ruleManagementService.StoredObjectEvent += IStoredObjectService_StoredObjectEvent;
+        }
+
+        // Single consumer loop: sequential, centrally guarded processing of queued work.
+        private async Task ProcessQueueAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                await foreach (var work in _workQueue.Reader.ReadAllAsync(cancellationToken))
+                {
+                    try
+                    {
+                        await work();
+                    }
+                    catch (Exception x)
+                    {
+                        _logger.LogError(x, "Error while processing queued MQTT work item");
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected on shutdown.
+            }
+        }
+
+        private void Enqueue(Func<Task> work)
+        {
+            if (!_workQueue.Writer.TryWrite(work))
+                _logger.LogWarning("Could not enqueue MQTT work item; queue is full or completed");
         }
 
         void IStoredObjectService_StoredObjectEvent(Type type, dynamic obj, OperationType changeType)
@@ -44,19 +88,24 @@ namespace RIoT2.Net.Orchestrator.Services
             //Send report when Variable changes
             if (type == typeof(Variable) && changeType == OperationType.Updated)
             {
-                SendReport((obj as Variable).CreateReport()).Wait();
+                var report = (obj as Variable).CreateReport();
+                Enqueue(() => SendReport(report));
             }
 
             //Send Configuration command to node if its configuration is being updated
             if (type == typeof(NodeDeviceConfiguration) && changeType == OperationType.Updated)
             {
-                SendConfigurationCommand((obj as NodeDeviceConfiguration).Id).Wait();
+                string id = (obj as NodeDeviceConfiguration).Id;
+                Enqueue(() => SendConfigurationCommand(id));
             }
         }
 
         public void Dispose()
         {
+            _cts.Cancel();
+            _workQueue.Writer.TryComplete();
             _client?.Dispose();
+            _cts.Dispose();
         }
 
         public async Task SendCommand(string topic, Command command)
@@ -94,92 +143,92 @@ namespace RIoT2.Net.Orchestrator.Services
 
         public async Task Stop()
         {
+            _workQueue.Writer.TryComplete();
             await _client.Stop();
         }
 
-        private async void _client_MessageReceived(MqttEventArgs mqttEventArgs)
+        // Callback stays lightweight: it only enqueues work and returns immediately.
+        private void _client_MessageReceived(MqttEventArgs mqttEventArgs)
         {
-            try
+            Enqueue(() => HandleMessageAsync(mqttEventArgs));
+        }
+
+        private async Task HandleMessageAsync(MqttEventArgs mqttEventArgs)
+        {
+            if (MqttClient.IsMatch(mqttEventArgs.Topic, _reportTopic))
             {
-                if (MqttClient.IsMatch(mqttEventArgs.Topic, _reportTopic))
+                var report = Report.Create(mqttEventArgs.Message);
+
+                if (report == null)
                 {
-                    var report = Report.Create(mqttEventArgs.Message);
-
-                    if (report == null)
-                    {
-                        _logger.LogWarning("Couldn't create Report {mqttEventArgs.Message}", mqttEventArgs.Message);
-                        return;
-                    }
-
-                    var template = _configuration.GetReportTemplates().FirstOrDefault(x => x.Id == report.Id);
-                    if (template == null)
-                        return; //Do not process reports that have not been defined
-
-                    _deviceStateService.SetState(report, template.MaintainHistory);
-
-                    //TODO validate report against template!
-
-                    //Re-route report to External Workflow Engine if configured
-                    if (_configuration.OrchestratorConfiguration.UseExtWorkflowEngine)
-                    {
-                        var workflowNode = _onlineNodeService.OnlineNodes.FirstOrDefault(x => x.OnlineNodeSettings.IsOnline && x.OnlineNodeSettings.NodeType == NodeType.Workflow);
-                        if (workflowNode != default)
-                        {
-                            var url = workflowNode.OnlineNodeSettings.NodeBaseUrl + Constants.ApiWorkflowTriggerUrl.Replace("{id}", report.Id);
-                            await Web.PostAsync(url, report.ToJson());
-                        }
-                        else
-                        {
-                            _logger.LogWarning("Could not process report {report.Id} because no workflow node is online", report.Id);
-                        }
-                    }
-                    else // use internal rule processor
-                    {
-                        var rules = new List<Rule>();
-                        foreach (var rule in _ruleManagementService.GetAll<Rule>())
-                        {
-                            if (!rule.IsActive)
-                                continue;
-
-                            if (rule.RuleItems == null || rule.RuleItems.Count < 2)
-                                continue;
-
-                            var trigger = rule.RuleItems.First() as RuleTrigger;
-                            if (trigger?.ReportId != report.Id)
-                                continue;
-
-                            if (!String.IsNullOrEmpty(report.Filter) && !String.IsNullOrEmpty(trigger?.Filter) && trigger?.Filter.ToLower() != report.Filter.ToLower())
-                                continue;
-
-                            rules.Add(rule);
-                        }
-
-                        if (rules.Count > 0)
-                            await _processorService.ProcessReportAsync(report, rules, processOutputs);
-                    }
+                    _logger.LogWarning("Couldn't create Report {Message}", mqttEventArgs.Message);
+                    return;
                 }
-                else if (MqttClient.IsMatch(mqttEventArgs.Topic, _nodeOnlineTopic))
+
+                var template = _configuration.GetReportTemplates().FirstOrDefault(x => x.Id == report.Id);
+                if (template == null)
+                    return; //Do not process reports that have not been defined
+
+                _deviceStateService.SetState(report, template.MaintainHistory);
+
+                //TODO validate report against template!
+
+                //Re-route report to External Workflow Engine if configured
+                if (_configuration.OrchestratorConfiguration.UseExtWorkflowEngine)
                 {
-                    var onlineMessage = Json.Deserialize<NodeOnlineMessage>(mqttEventArgs.Message);
-                    var clientId = Constants.GetTopicId(mqttEventArgs.Topic, MqttTopic.NodeOnline);
-
-                    if (onlineMessage.IsOnline)
+                    var workflowNode = _onlineNodeService.OnlineNodes.FirstOrDefault(x => x.OnlineNodeSettings.IsOnline && x.OnlineNodeSettings.NodeType == NodeType.Workflow);
+                    if (workflowNode != default)
                     {
-                        _onlineNodeService.Add(new Models.OnlineNode()
-                        {
-                            Id = clientId,
-                            OnlineNodeSettings = onlineMessage
-                        });
-
-                        await SendConfigurationCommand(clientId);
+                        var url = workflowNode.OnlineNodeSettings.NodeBaseUrl + Constants.ApiWorkflowTriggerUrl.Replace("{id}", report.Id);
+                        await Web.PostAsync(url, report.ToJson());
                     }
                     else
-                        _onlineNodeService.Remove(clientId);
+                    {
+                        _logger.LogWarning("Could not process report {ReportId} because no workflow node is online", report.Id);
+                    }
+                }
+                else // use internal rule processor
+                {
+                    var rules = new List<Rule>();
+                    foreach (var rule in _ruleManagementService.GetAll<Rule>())
+                    {
+                        if (!rule.IsActive)
+                            continue;
+
+                        if (rule.RuleItems == null || rule.RuleItems.Count < 2)
+                            continue;
+
+                        var trigger = rule.RuleItems.First() as RuleTrigger;
+                        if (trigger?.ReportId != report.Id)
+                            continue;
+
+                        if (!String.IsNullOrEmpty(report.Filter) && !String.IsNullOrEmpty(trigger?.Filter) && trigger?.Filter.ToLower() != report.Filter.ToLower())
+                            continue;
+
+                        rules.Add(rule);
+                    }
+
+                    if (rules.Count > 0)
+                        await _processorService.ProcessReportAsync(report, rules, processOutputs);
                 }
             }
-            catch (Exception x) 
+            else if (MqttClient.IsMatch(mqttEventArgs.Topic, _nodeOnlineTopic))
             {
-                _logger.LogError(x, "Could not handle mqtt message {mqttEventArgs.Message}", mqttEventArgs.Message);
+                var onlineMessage = Json.Deserialize<NodeOnlineMessage>(mqttEventArgs.Message);
+                var clientId = Constants.GetTopicId(mqttEventArgs.Topic, MqttTopic.NodeOnline);
+
+                if (onlineMessage.IsOnline)
+                {
+                    _onlineNodeService.Add(new Models.OnlineNode()
+                    {
+                        Id = clientId,
+                        OnlineNodeSettings = onlineMessage
+                    });
+
+                    await SendConfigurationCommand(clientId);
+                }
+                else
+                    _onlineNodeService.Remove(clientId);
             }
         }
 

@@ -36,20 +36,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
         [HttpGet]
         public async Task<IActionResult> GetNodesAsync()
         {
-            List<Node> nodes = new List<Node>();
-            foreach (var conf in _configuration.NodeConfigurations) 
-            {
-                var onlineNode = _onlineNodeService.OnlineNodes.FirstOrDefault(x => x.Id == conf.Id);
-                nodes.Add(new Node() {
-                    Id = conf.Id,
-                    Name = conf.Name,
-                    IsOnline = onlineNode != null,
-                    DeviceStatuses = await _onlineNodeService.LoadDeviceStatusFromNodeAsync(conf.Id),
-                    Manifest = onlineNode?.OnlineNodeSettings.Manifest,
-                    PluginManifest = onlineNode?.OnlineNodeSettings.PluginManifest
-                });
-            }
-
+            var nodes = await _onlineNodeService.GetNodesAsync();
             return new OkObjectResult(nodes);
         }
 
