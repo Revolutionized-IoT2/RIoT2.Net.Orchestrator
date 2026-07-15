@@ -102,16 +102,25 @@ namespace RIoT2.Net.Orchestrator.Services
 
         public void Dispose()
         {
+            _ruleManagementService.StoredObjectEvent -= IStoredObjectService_StoredObjectEvent;
             _cts.Cancel();
             _workQueue.Writer.TryComplete();
+            try
+            {
+                _consumerTask.Wait(TimeSpan.FromSeconds(5));
+            }
+            catch
+            {
+                // Ignore errors during shutdown of the consumer task.
+            }
             _client?.Dispose();
             _cts.Dispose();
         }
 
         public async Task SendCommand(string topic, Command command)
         {
-            _deviceStateService.SetState(command);
             await _client.Publish(topic, Json.SerializeIgnoreNulls(command));
+            _deviceStateService.SetState(command);
         }
 
         public async Task SendConfigurationCommand(string id)
@@ -130,8 +139,10 @@ namespace RIoT2.Net.Orchestrator.Services
         {
             try
             {
-                await _client.Start(_reportTopic, _nodeOnlineTopic);
+                // Attach the handler before subscribing so no messages are missed
+                // in the window between subscription and handler registration.
                 _client.MessageReceived += _client_MessageReceived;
+                await _client.Start(_reportTopic, _nodeOnlineTopic);
 
                 await sendOrchestratorOnlineCommand();
             }

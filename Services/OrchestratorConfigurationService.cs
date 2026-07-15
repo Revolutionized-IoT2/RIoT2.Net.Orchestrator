@@ -1,5 +1,4 @@
-﻿using Microsoft.VisualBasic;
-using RIoT2.Core.Interfaces.Services;
+﻿using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Models;
 using RIoT2.Core.Utils;
 
@@ -8,11 +7,11 @@ namespace RIoT2.Net.Orchestrator.Services
     public class OrchestratorConfigurationService : IOrchestratorConfigurationService
     {
         private OrchestratorConfiguration _configuration;
-        private List<NodeDeviceConfiguration> _nodes;
+        private List<NodeDeviceConfiguration> _nodes = [];
         private ILogger _logger;
         private DashboardConfiguration _dashboardConfiguration;
         private IStoredObjectService _storedObjectService;
-        private IEnumerable<Variable> _variables;
+        private IEnumerable<Variable> _variables = [];
 
         public OrchestratorConfigurationService(IStoredObjectService storedObjectService, ILogger<OrchestratorConfigurationService> logger) 
         {
@@ -55,7 +54,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 .SelectMany(d => d.CommandTemplates))
                 .ToList();
 
-            foreach (var v in _variables)
+            foreach (var v in _variables ?? [])
                 templates.Add(v.GetAsCommandTemplate());
 
             return templates;
@@ -70,7 +69,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 .ToList();
 
             //Add variables to templates
-            foreach (var v in _variables)
+            foreach (var v in _variables ?? [])
                 templates.Add(v.GetAsReportTemplate());
 
             return templates;
@@ -172,7 +171,7 @@ namespace RIoT2.Net.Orchestrator.Services
             }
 
             //Ensure that all sub items have ID
-            foreach (var dev in configuration.DeviceConfigurations)
+            foreach (var dev in configuration.DeviceConfigurations ?? [])
             {
                 if (String.IsNullOrEmpty(dev.Id))
                     dev.Id = Guid.NewGuid().ToString();

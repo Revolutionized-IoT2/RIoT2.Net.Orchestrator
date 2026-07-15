@@ -51,7 +51,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 {
                     Id = conf.Id,
                     Name = conf.Name,
-                    IsOnline = onlineNode != null,
+                    IsOnline = onlineNode?.OnlineNodeSettings?.IsOnline == true,
                     DeviceStatuses = deviceStatuses,
                     Manifest = onlineNode?.OnlineNodeSettings.Manifest,
                     PluginManifest = onlineNode?.OnlineNodeSettings.PluginManifest
