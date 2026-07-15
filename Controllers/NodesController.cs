@@ -8,7 +8,6 @@ using RIoT2.Net.Orchestrator.Models;
 using RIoT2.Net.Orchestrator.Services;
 using System.Net.Http.Headers;
 using System.Text;
-using System.Xml.Linq;
 
 namespace RIoT2.Net.Orchestrator.Controllers
 {
@@ -95,6 +94,9 @@ namespace RIoT2.Net.Orchestrator.Controllers
                 includesState = HttpContext.Request.Query["state"].ToString().ToLower() == "true";
 
             var configuration = _configuration.NodeConfigurations.FirstOrDefault(x => x.Id == id);
+            if (configuration == null)
+                return NotFound($"Could not find node configuration with ID: {id}");
+
             if (includesState)
                 appendCurrentStates(ref configuration);
 
@@ -114,11 +116,8 @@ namespace RIoT2.Net.Orchestrator.Controllers
         {
             try
             {
-                if (plugin == null) 
-                {
-                    plugin.ErrorMessage = "Plugin object cannot be null";
-                    return new OkObjectResult(plugin);
-                }
+                if (plugin == null)
+                    return new BadRequestObjectResult("Plugin object cannot be null");
 
                 if (String.IsNullOrEmpty(plugin.Url)) 
                 {
@@ -176,12 +175,12 @@ namespace RIoT2.Net.Orchestrator.Controllers
         }
 
         [HttpGet("report/{id}/state")]
-        public IActionResult GetReportState(string type, string id)
+        public async Task<IActionResult> GetReportState(string id)
         {
             var report = _messageStateService.Reports.FirstOrDefault(x => x.Id == id);
             if (report == null) //if there are no report, try fetching directly from online node
             {
-                var templates = _onlineNodeService.LoadDeviceConfigurationTemplatesAsync().Result;
+                var templates = await _onlineNodeService.LoadDeviceConfigurationTemplatesAsync();
                 foreach (var node in templates.Keys) 
                 {
                     var confs = templates[node];
@@ -201,20 +200,23 @@ namespace RIoT2.Net.Orchestrator.Controllers
                         var reportTemplate = device.ReportTemplates.FirstOrDefault(x => x.Address == reportConfiguration.Address);
                         if(reportTemplate != null)
                             return Content(Json.Serialize(reportTemplate), "application/json");
-                            //return new OkObjectResult(reportTemplate);
                     }
                 } 
+
+                return NotFound($"Could not find report state with ID: {id}");
             }
 
             return Content(Json.Serialize(report), "application/json");
-            //return new OkObjectResult(report);
         }
 
         [HttpGet("command/{id}/state")]
-        public IActionResult GetCommandState(string type, string id)
+        public IActionResult GetCommandState(string id)
         {
-            return Content(Json.Serialize(_messageStateService.Commands.FirstOrDefault(x => x.Id == id)), "application/json");
-            //return new OkObjectResult(_messageStateService.Commands.FirstOrDefault(x => x.Id == id));
+            var command = _messageStateService.Commands.FirstOrDefault(x => x.Id == id);
+            if (command == null)
+                return NotFound($"Could not find command state with ID: {id}");
+
+            return Content(Json.Serialize(command), "application/json");
         }
 
         [HttpPost("report/state")]
