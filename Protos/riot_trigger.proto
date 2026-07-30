@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+option csharp_namespace = "RIoT2.Net.Orchestrator.Grpc";
+
+package riot;
+
+// gRPC equivalent of POST /riot/trigger/{id}, provided as an optional alternative
+// transport for starting/resuming workflows associated with a RIoT event.
+service RIoTTriggerService {
+  rpc Trigger (TriggerRequest) returns (TriggerResponse);
+}
+
+message TriggerRequest {
+  // The RIoT event id (matches the id used in the HTTP route and the RIoT Trigger activity).
+  string id = 1;
+  // JSON-encoded event payload (equivalent to the HTTP request body).
+  string data = 2;
+}
+
+message TriggerResponse {
+  bool success = 1;
+}

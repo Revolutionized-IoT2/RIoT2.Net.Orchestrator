@@ -1,9 +1,11 @@
 ﻿using System.Runtime.InteropServices;
 using System.Threading.Channels;
+using Grpc.Net.Client;
 using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Utils;
 using RIoT2.Core;
 using RIoT2.Core.Models;
+using RIoT2.Net.Orchestrator.Grpc;
 
 namespace RIoT2.Net.Orchestrator.Services
 {
@@ -190,8 +192,17 @@ namespace RIoT2.Net.Orchestrator.Services
                     var workflowNode = _onlineNodeService.OnlineNodes.FirstOrDefault(x => x.OnlineNodeSettings.IsOnline && x.OnlineNodeSettings.NodeType == NodeType.Workflow);
                     if (workflowNode != default)
                     {
-                        var url = workflowNode.OnlineNodeSettings.NodeBaseUrl + Constants.ApiWorkflowTriggerUrl.Replace("{id}", report.Id);
-                        await Web.PostAsync(url, report.ToJson());
+                        using var channel = GrpcChannel.ForAddress(workflowNode.OnlineNodeSettings.NodeBaseUrl);
+                        var client = new RIoTTriggerService.RIoTTriggerServiceClient(channel);
+
+                        var response = await client.TriggerAsync(new TriggerRequest
+                        {
+                            Id = report.Id,
+                            Data = report.ToJson()
+                        });
+
+                        if (!response.Success)
+                            _logger.LogWarning("Workflow engine did not accept report {ReportId}", report.Id);
                     }
                     else
                     {

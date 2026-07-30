@@ -7,6 +7,9 @@ using RIoT2.Net.Orchestrator.Services.Persistence;
 using System.Text.Json;
 using Serilog;
 
+// Workflow nodes (e.g. Elsa) are reached over plain HTTP; allow cleartext HTTP/2 so Grpc.Net.Client can call them.
+AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 var serilog = new LoggerConfiguration()
