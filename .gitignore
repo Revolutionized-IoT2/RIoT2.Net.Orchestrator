@@ -10,3 +10,10 @@
 /StoredObjects/*
 /Properties/launchSettings.json
 /Logs
+/StoredObjects/NodeDeviceConfiguration/D9D86D96-06C1-4C61-D6BEB2E3FA8D.json
+.github/copilot-instructions.md
+bin/Debug/net9.0/RIoT2.Net.Orchestrator.deps.json
+/bin/Debug/net9.0/RIoT2.Net.Orchestrator.deps.json
+/bin/Debug/net9.0/RIoT2.Net.Orchestrator.dll
+/bin/Debug/net9.0/RIoT2.Net.Orchestrator.exe
+/bin/Debug/net9.0/RIoT2.Net.Orchestrator.pdb
