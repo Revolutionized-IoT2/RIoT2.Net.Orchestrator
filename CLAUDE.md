@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (and other AI coding agents) when wor
 
 ## Project Overview
 
-`RIoT2.Net.Orchestrator` is an ASP.NET Core Web API (targeting **.NET 9**) that acts as the central orchestrator for the RIoT2 IoT platform. It manages IoT nodes, processes rules, maintains message/variable state, and communicates with devices over MQTT.
+`RIoT2.Net.Orchestrator` is an ASP.NET Core Web API (targeting **.NET 9**) that acts as the central orchestrator for the RIoT2 IoT platform. It manages IoT nodes, forwards reports to Elsa 3, maintains message/variable state, and communicates with devices over MQTT.
 
 ## Build, Run & Debug
 
@@ -26,9 +26,7 @@ This file provides guidance to Claude Code (and other AI coding agents) when wor
 ### Core Services (registered as singletons in `Program.cs`)
 - `IOrchestratorConfigurationService` → `OrchestratorConfigurationService` — loads/holds orchestrator configuration and manifest.
 - `IOnlineNodeService` → `OnlineNodeService` — tracks online IoT nodes.
-- `IRuleProcessorService` → `RuleProcessorService` — evaluates and executes rules.
 - `IStoredObjectService` → `StoredObjectService` — generic persistence for stored objects (e.g. `Variable`).
-- `IFunctionService` → `FunctionService` — function execution.
 - `IMessageStateService` → `MessageStateService` — maintains current message/report state.
 - `IOrchestratorMqttService` → `OrchestratorMqttService` — MQTT client/broker communication.
 - `IMatterBridgeService` → `MatterBridgeService` — hosts the Matter Control Bridge (`Services/Matter/`) and exposes Matter-capable RIoT devices as bridged endpoints. Also registered as `IMatterReportSink`, which `OrchestratorMqttService` takes as an optional dependency to mirror reports into the bridge (this breaks the singleton construction cycle; the bridge resolves `IOrchestratorMqttService` lazily for the command direction).
@@ -38,7 +36,12 @@ This file provides guidance to Claude Code (and other AI coding agents) when wor
 Service interfaces and shared models come from the external `RIoT2.Core` package.
 
 ### Controllers (`Controllers/`)
-REST API endpoints including `ReportController`, `CommandController`, `VariableController`, `NodesController`, `RulesController`, `DashboardController`, `MatterController`.
+REST API endpoints including `ReportController`, `CommandController`, `VariableController`, `NodesController`, `DashboardController`, `MatterController`.
+
+Elsa 3 is the only workflow engine. Do not register an internal rule processor or restore the retired
+rule/function APIs. The old external-engine environment switch is no longer read. Commands use
+`POST api/Command/execute` and `IOrchestratorMqttService.ExecuteCommand(Command)`; the former
+`api/Nodes/command/{type}` endpoint is retired.
 
 ### Custom JSON Settings (`CustomJsonSettings/`)
 Named JSON option profiles selectable via the `json-naming-policy` request header:
@@ -84,11 +87,11 @@ Incoming topics are disambiguated with `MqttClient.IsMatch(topic, subscription)`
 |---|---|---|---|
 | Orchestrator online announcement | riot2/orchestrator/online | none (empty, **retained**) | Sent on `Start()` so nodes can discover the orchestrator on (re)connect. |
 | Configuration command | riot2/{nodeId}/configuration | `ConfigurationCommand` (contains `ApiBaseUrl`) | Sent when a node comes online, and when a `NodeDeviceConfiguration` is updated. |
-| Device command | riot2/{nodeId}/command | `Command` (`Id`, `Value`) | Produced by rule outputs (`RuleEvaluationResult`) targeting a device; node id resolved via `IOrchestratorConfigurationService.FindNodeId`. Command state is recorded via `IMessageStateService.SetState` before publishing. |
+| Device command | riot2/{nodeId}/command | `Command` (`Id`, `Value`) | Requested by Elsa, the dashboard, or Matter; node id resolved via `IOrchestratorConfigurationService.FindNodeId`. Command state is recorded via `IMessageStateService.SetState` after publishing. |
 | Orchestrator report | riot2/{orchestratorId}/report | `Report` | Published when a `Variable` changes (via `Variable.CreateReport()`), so the orchestrator's own variables are visible as reports. |
 
 ### Message Content Notes
 
 - Commands are serialized with `Json.SerializeIgnoreNulls(...)` (null properties omitted); reports use `Report.ToJson()`.
-- Rule outputs with `OutputOperation.Variable` are **not** published to MQTT — they update a stored `Variable` internally (which may in turn trigger a report publication).
+- Variable updates use the variable APIs and may trigger report publication.
 - The `OrchestratorOnline` message is published **retained** so late-joining nodes still receive it.

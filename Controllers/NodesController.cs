@@ -7,7 +7,6 @@ using RIoT2.Core.Utils;
 using RIoT2.Net.Orchestrator.Models;
 using RIoT2.Net.Orchestrator.Services;
 using System.Net.Http.Headers;
-using System.Text;
 
 namespace RIoT2.Net.Orchestrator.Controllers
 {
@@ -18,18 +17,14 @@ namespace RIoT2.Net.Orchestrator.Controllers
         private IOrchestratorConfigurationService _configuration;
         private IOnlineNodeService _onlineNodeService;
         private IMessageStateService _messageStateService;
-        private IFunctionService _functionService;
         private IStoredObjectService _storedObjectService;
-        private IOrchestratorMqttService _mqtt;
 
-        public NodesController(IOrchestratorConfigurationService configuration, IOnlineNodeService onlineNodeService, IMessageStateService messageStateService, IFunctionService functionService, IStoredObjectService storedObjectService, IOrchestratorMqttService orchestratorMqttService) 
+        public NodesController(IOrchestratorConfigurationService configuration, IOnlineNodeService onlineNodeService, IMessageStateService messageStateService, IStoredObjectService storedObjectService)
         {
             _configuration = configuration;
             _onlineNodeService = onlineNodeService; 
             _messageStateService = messageStateService;
-            _functionService = functionService;
             _storedObjectService = storedObjectService;
-            _mqtt = orchestratorMqttService;
         }
 
         [HttpGet]
@@ -320,23 +315,6 @@ namespace RIoT2.Net.Orchestrator.Controllers
             return new OkObjectResult(a);
         }
 
-        [HttpGet("function/templates")]
-        public IActionResult GetFunctionTemplatates()
-        {
-            var a = new List<object>();
-            foreach (var f in _functionService.GetFunctions())
-            {
-                a.Add(new
-                {
-                    f.Name,
-                    f.Description,
-                    f.ExpectedParameters,
-                    f.Id
-                });
-            }
-            return new OkObjectResult(a);
-        }
-
         [HttpGet("{id}/device/templates")]
         public async Task<IActionResult> GetOnlineDeviceConfigurationTemplatates(string id)
         {
@@ -392,38 +370,6 @@ namespace RIoT2.Net.Orchestrator.Controllers
             return NoContent();
         }
 
-
-        /// <summary>
-        /// Nodes (or dashboard) can send commands only via orchestrator. Otherwise state is not tracked.
-        /// </summary>
-        /// <param name="variable"></param>
-        /// <returns></returns>
-        [HttpPost("command/{type}")]
-        public async Task<IActionResult> SendOrchestratorCommandAsync(int type)
-        {
-            string json;
-            using (StreamReader reader = new StreamReader(Request.Body, Encoding.UTF8))
-                json = await reader.ReadToEndAsync();
-
-            if (String.IsNullOrEmpty(json))
-                return BadRequest();
-
-            var cmd = Json.Deserialize<Command>(json);
-            if (cmd == null)
-                return BadRequest();
-
-            //TODO get Operation from template...
-            var op = (OutputOperation)type;
-
-            await _mqtt.ProcessOutput(new RuleEvaluationResult() 
-            {
-                Value = cmd.Value,
-                CommandId = cmd.Id,
-                Operation = op
-            });
-
-            return new OkResult();
-        }
 
         private void appendCurrentStates(ref NodeDeviceConfiguration configuration) 
         {
