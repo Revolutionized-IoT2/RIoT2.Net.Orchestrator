@@ -57,6 +57,7 @@ namespace RIoT2.Net.Orchestrator.Services
 
         public string Save<T>(T obj, bool persistent = true, bool autoTypeNameHandling = false, bool includeNulls = false)
         {
+            ArgumentNullException.ThrowIfNull(obj);
             OperationType op;
             string id;
 
@@ -65,6 +66,9 @@ namespace RIoT2.Net.Orchestrator.Services
                 id = Guid.NewGuid().ToString();
 
                 var t = getTypeString(typeof(T));
+                if (!_objects.ContainsKey(t))
+                    load<T>();
+
                 if (String.IsNullOrEmpty((obj as dynamic).Id))
                     (obj as dynamic).Id = id;
                 else
@@ -73,27 +77,21 @@ namespace RIoT2.Net.Orchestrator.Services
                 var json = Json.SerializeAutoTypeNameHandling(obj, autoTypeNameHandling, includeNulls);
 
                 //Check if current exists -> if does and no change, do nothing
-                _objects.TryGetValue(t, out var objs);
-                if (objs != null)
+                var objs = _objects[t];
+                var currentObject = objs.FirstOrDefault(x => x.Id == id);
+                if (currentObject != null)
                 {
-                    var currentObject = objs.FirstOrDefault(x => x.Id == id);
-                    if (currentObject != null)
+                    var currentJson = Json.SerializeAutoTypeNameHandling(currentObject, autoTypeNameHandling, includeNulls);
+                    if (currentJson == json)
                     {
-                        var currentJson = Json.SerializeAutoTypeNameHandling(currentObject, autoTypeNameHandling, includeNulls);
-                        if (currentJson == json)
-                        {
-                            _logger.LogInformation("No change in existing object. Object not Saved.");
-                            StoredObjectEvent?.Invoke(typeof(T), obj, OperationType.NoChange);
-                            return id;
-                        }
+                        _logger.LogInformation("No change in existing object. Object not Saved.");
+                        StoredObjectEvent?.Invoke(typeof(T), obj, OperationType.NoChange);
+                        return id;
                     }
                 }
 
                 if (persistent)
                 {
-                    // Overwrite semantics: remove any existing durable copy first.
-                    _store.Delete(t, id);
-
                     try
                     {
                         _store.Write(t, id, json);
@@ -105,15 +103,9 @@ namespace RIoT2.Net.Orchestrator.Services
                     }
                 }
 
-                op = OperationType.Created;
-                if (_objects.ContainsKey(t))
-                {
-                    _objects[t].RemoveAll(x => x.Id == id);
-                    _objects[t].Add(obj);
-                    op = OperationType.Updated;
-                }
-                else
-                    _objects.Add(t, new List<dynamic>() { obj });
+                op = currentObject == null ? OperationType.Created : OperationType.Updated;
+                objs.RemoveAll(x => x.Id == id);
+                objs.Add(obj);
             }
 
             StoredObjectEvent?.Invoke(typeof(T), obj, op);
@@ -127,7 +119,10 @@ namespace RIoT2.Net.Orchestrator.Services
 
         public void DeleteAll<T>()
         {
-            delete<T>();
+            lock (_sync)
+            {
+                delete<T>();
+            }
             StoredObjectEvent?.Invoke(typeof(T), null, OperationType.Deleted);
         }
 
@@ -135,11 +130,17 @@ namespace RIoT2.Net.Orchestrator.Services
         {
             var t = getTypeString(typeof(T));
             if (!_objects.ContainsKey(t))
-                return;
+                load<T>();
 
             var objs = _objects[t];
-            if (objs == null)
-                return;
+
+            if (persistent)
+            {
+                if (id == "")
+                    _store.DeleteAll(t);
+                else
+                    _store.Delete(t, id);
+            }
 
             if (id == "") //delete everything of type T
             {
@@ -152,13 +153,6 @@ namespace RIoT2.Net.Orchestrator.Services
                     objs.Remove(objToDelete);
             }
 
-            if (persistent)
-            {
-                if (id == "") //delete everything of type T
-                    _store.DeleteAll(t);
-                else
-                    _store.Delete(t, id);
-            }
         }
 
         private void load<T>()
@@ -178,7 +172,8 @@ namespace RIoT2.Net.Orchestrator.Services
             }
             catch (Exception x)
             {
-                _logger.LogError("Could not load objects {Message}", x.Message);
+                _logger.LogError(x, "Could not load objects of type {Type}", t);
+                throw;
             }
         }
 
