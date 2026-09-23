@@ -6,6 +6,7 @@ using RIoT2.Core.Utils;
 using RIoT2.Core;
 using RIoT2.Core.Models;
 using RIoT2.Net.Orchestrator.Grpc;
+using RIoT2.Net.Orchestrator.Services.Matter;
 
 namespace RIoT2.Net.Orchestrator.Services
 {
@@ -17,6 +18,7 @@ namespace RIoT2.Net.Orchestrator.Services
         private readonly IMessageStateService _deviceStateService;
         private readonly IStoredObjectService _ruleManagementService;
         private readonly IOnlineNodeService _onlineNodeService;
+        private readonly IMatterReportSink _matterSink;
         private readonly ILogger _logger;
 
         private string _reportTopic;
@@ -27,7 +29,7 @@ namespace RIoT2.Net.Orchestrator.Services
         private readonly CancellationTokenSource _cts;
         private readonly Task _consumerTask;
 
-        public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IRuleProcessorService workflowService, IMessageStateService deviceStateService, IStoredObjectService ruleManagementService, IOnlineNodeService onlineNodeService, ILogger<OrchestratorMqttService> logger)
+        public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IRuleProcessorService workflowService, IMessageStateService deviceStateService, IStoredObjectService ruleManagementService, IOnlineNodeService onlineNodeService, ILogger<OrchestratorMqttService> logger, IMatterReportSink matterSink = null)
         {
             _logger = logger;
             _ruleManagementService = ruleManagementService;
@@ -35,6 +37,7 @@ namespace RIoT2.Net.Orchestrator.Services
             _processorService = workflowService;
             _deviceStateService = deviceStateService;
             _onlineNodeService = onlineNodeService;
+            _matterSink = matterSink;
 
             _reportTopic = Constants.Get("+", MqttTopic.Report); // Orchestrator is listening all reports...
             _nodeOnlineTopic = Constants.Get("+", MqttTopic.NodeOnline); // Orchestrator is listening all nodes...
@@ -183,6 +186,9 @@ namespace RIoT2.Net.Orchestrator.Services
                     return; //Do not process reports that have not been defined
 
                 _deviceStateService.SetState(report, template.MaintainHistory);
+
+                //Mirror the report onto any Matter endpoint bound to it, so a controller sees the change
+                _matterSink?.OnReport(report);
 
                 //TODO validate report against template!
 

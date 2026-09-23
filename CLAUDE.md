@@ -31,12 +31,14 @@ This file provides guidance to Claude Code (and other AI coding agents) when wor
 - `IFunctionService` → `FunctionService` — function execution.
 - `IMessageStateService` → `MessageStateService` — maintains current message/report state.
 - `IOrchestratorMqttService` → `OrchestratorMqttService` — MQTT client/broker communication.
+- `IMatterBridgeService` → `MatterBridgeService` — hosts the Matter Control Bridge (`Services/Matter/`) and exposes Matter-capable RIoT devices as bridged endpoints. Also registered as `IMatterReportSink`, which `OrchestratorMqttService` takes as an optional dependency to mirror reports into the bridge (this breaks the singleton construction cycle; the bridge resolves `IOrchestratorMqttService` lazily for the command direction).
 - `MqttBackgroundService` (`IHostedService`) — starts/stops the MQTT service with the app lifetime.
+- `MatterBackgroundService` (`IHostedService`) — starts/stops the Matter bridge with the app lifetime; it is a no-op while the bridge is disabled in its configuration.
 
 Service interfaces and shared models come from the external `RIoT2.Core` package.
 
 ### Controllers (`Controllers/`)
-REST API endpoints including `ReportController`, `CommandController`, `VariableController`, `NodesController`, `RulesController`, `DashboardController`.
+REST API endpoints including `ReportController`, `CommandController`, `VariableController`, `NodesController`, `RulesController`, `DashboardController`, `MatterController`.
 
 ### Custom JSON Settings (`CustomJsonSettings/`)
 Named JSON option profiles selectable via the `json-naming-policy` request header:

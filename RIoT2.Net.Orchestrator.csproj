@@ -13,7 +13,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="RIoT2.Core" Version="0.1.37" />
+    <PackageReference Include="RIoT2.Core" Version="0.1.38" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+    <PackageReference Include="RIoT2.Matter" Version="0.1.12" />
+    <PackageReference Include="RIoT2.Matter.ControlBridge" Version="0.1.12" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="Google.Protobuf" Version="3.28.2" />
@@ -23,6 +26,10 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
   </ItemGroup>
+
+  <!-- The Matter stack. These must be published to the private GitHub NuGet feed and referenced as
+       packages before the container build: the Dockerfile restores from that feed and cannot see a
+       ProjectReference. -->
 
   <ItemGroup>
     <Protobuf Include="Protos\riot_trigger.proto" GrpcServices="Client" />
