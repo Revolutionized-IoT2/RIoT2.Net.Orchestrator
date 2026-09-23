@@ -13,10 +13,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="RIoT2.Core" Version="0.1.40" />
+    <PackageReference Include="RIoT2.Core" Version="0.1.41" />
     <PackageReference Include="QRCoder" Version="1.6.0" />
-    <PackageReference Include="RIoT2.Matter" Version="0.1.13" />
-    <PackageReference Include="RIoT2.Matter.ControlBridge" Version="0.1.13" />
+    <PackageReference Include="RIoT2.Matter" Version="0.1.14" />
+    <PackageReference Include="RIoT2.Matter.ControlBridge" Version="0.1.14" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="Google.Protobuf" Version="3.28.2" />

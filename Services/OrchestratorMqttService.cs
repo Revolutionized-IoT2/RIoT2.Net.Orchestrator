@@ -30,7 +30,7 @@ namespace RIoT2.Net.Orchestrator.Services
         private readonly Task _workflowTask;
         private int _disposed;
 
-        public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IMessageStateService deviceStateService, IStoredObjectService storedObjectService, IOnlineNodeService onlineNodeService, ILogger<OrchestratorMqttService> logger, IMatterReportSink matterSink = null)
+        public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IMessageStateService deviceStateService, IStoredObjectService storedObjectService, IOnlineNodeService onlineNodeService, ILogger<OrchestratorMqttService> logger, IMatterReportSink matterSink = null, MqttClient mqttClient = null)
         {
             _logger = logger;
             _storedObjectService = storedObjectService;
@@ -42,7 +42,7 @@ namespace RIoT2.Net.Orchestrator.Services
             _reportTopic = Constants.Get("+", MqttTopic.Report); // Orchestrator is listening all reports...
             _nodeOnlineTopic = Constants.Get("+", MqttTopic.NodeOnline); // Orchestrator is listening all nodes...
 
-            _client = new MqttClient(_configuration.OrchestratorConfiguration.Mqtt.ClientId,
+            _client = mqttClient ?? new MqttClient(_configuration.OrchestratorConfiguration.Mqtt.ClientId,
                 _configuration.OrchestratorConfiguration.Mqtt.ServerUrl,
                 _configuration.OrchestratorConfiguration.Mqtt.Username,
                 _configuration.OrchestratorConfiguration.Mqtt.Password);
@@ -124,10 +124,13 @@ namespace RIoT2.Net.Orchestrator.Services
             }
 
             //Send Configuration command to node if its configuration is being updated
-            if (type == typeof(NodeDeviceConfiguration) && changeType is OperationType.Created or OperationType.Updated)
+            if (type == typeof(NodeDeviceConfiguration))
             {
-                string id = (obj as NodeDeviceConfiguration).Id;
-                Enqueue(() => SendConfigurationCommand(id));
+                string id = changeType == OperationType.Deleted ? null : (obj as NodeDeviceConfiguration)?.Id;
+                if (_matterSink != null)
+                    Enqueue(_matterSink.OnConfigurationChangedAsync);
+                if (id != null)
+                    Enqueue(() => SendConfigurationCommand(id));
             }
         }
 
@@ -173,7 +176,7 @@ namespace RIoT2.Net.Orchestrator.Services
         private async Task sendOrchestratorOnlineCommand()
         {
             //Retain message so nodes can get orchestrator info on reconnect
-            await _client.Publish(Constants.Get("", MqttTopic.OrchestratorOnline), null, true);
+            await _client.Publish(Constants.Get("", MqttTopic.OrchestratorOnline), "{\"isOnline\":true}", true);
         }
 
         public async Task Start()
@@ -183,9 +186,8 @@ namespace RIoT2.Net.Orchestrator.Services
                 // Attach the handler before subscribing so no messages are missed
                 // in the window between subscription and handler registration.
                 _client.MessageReceived += _client_MessageReceived;
+                _client.ConnectedAsync += sendOrchestratorOnlineCommand;
                 await _client.Start(_reportTopic, _nodeOnlineTopic);
-
-                await sendOrchestratorOnlineCommand();
             }
             catch (Exception x)
             {
@@ -196,6 +198,7 @@ namespace RIoT2.Net.Orchestrator.Services
         public async Task Stop()
         {
             _client.MessageReceived -= _client_MessageReceived;
+            _client.ConnectedAsync -= sendOrchestratorOnlineCommand;
             _storedObjectService.StoredObjectEvent -= IStoredObjectService_StoredObjectEvent;
             _workQueue.Writer.TryComplete();
             await _consumerTask;
@@ -271,11 +274,12 @@ namespace RIoT2.Net.Orchestrator.Services
                         Id = clientId,
                         OnlineNodeSettings = onlineMessage
                     });
-
-                    await SendConfigurationCommand(clientId);
                 }
                 else
                     _onlineNodeService.Remove(clientId);
+                _matterSink?.OnNodeOnlineChanged(clientId, onlineMessage.IsOnline);
+                if (onlineMessage.IsOnline)
+                    await SendConfigurationCommand(clientId);
             }
         }
 

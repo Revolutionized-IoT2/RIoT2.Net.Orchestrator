@@ -52,6 +52,8 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
 
         // Copied on read so OnReport can walk the adapters without holding the gate on the MQTT thread.
         private volatile RiotBridgedDeviceAdapter[] _adapters = [];
+        private readonly object _presenceGate = new();
+        private readonly Dictionary<string, string> _adapterSignatures = new(StringComparer.Ordinal);
 
         private MatterConfiguration _configuration;
         private MatterBridgeState _state;
@@ -155,7 +157,6 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
                 if (_bridge is null)
                     return;
 
-                await RemoveDevicesAsync(cancellationToken);
                 await AddDevicesAsync(cancellationToken);
             }
             finally
@@ -280,6 +281,21 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
             }
         }
 
+        public Task OnConfigurationChangedAsync() => RefreshDevicesAsync();
+
+        public void OnNodeOnlineChanged(string nodeId, bool isOnline)
+        {
+            lock (_presenceGate)
+                foreach (var adapter in _adapters.Where(a => a.NodeId == nodeId))
+                {
+                    try { adapter.SetReachable(isOnline); }
+                    catch (Exception x)
+                    {
+                        _logger?.LogError(x, "Matter endpoint {Endpoint} could not update reachability", adapter.Template.Id);
+                    }
+                }
+        }
+
         /// <inheritdoc />
         public async ValueTask DisposeAsync()
         {
@@ -392,60 +408,92 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
             _fabricPersistence = null;
         }
 
-        private async Task AddDevicesAsync(CancellationToken cancellationToken)
+        private Task AddDevicesAsync(CancellationToken cancellationToken) =>
+            _bridge?.Aggregator is { } aggregator ? ReconcileDevicesAsync(aggregator, cancellationToken) : Task.CompletedTask;
+
+        internal async Task ReconcileDevicesAsync(RIoT2.Matter.ControlBridge.AggregatorEndpoint bridge, CancellationToken cancellationToken = default)
         {
-            var bridge = _bridge;
-            if (bridge is null)
-                return;
+            ArgumentNullException.ThrowIfNull(bridge);
 
-            var online = _onlineNodes.OnlineNodes.Select(n => n.Id).ToHashSet(StringComparer.Ordinal);
-            var adapters = new List<RiotBridgedDeviceAdapter>();
-            var mapChanged = false;
-
+            var online = _onlineNodes.OnlineNodes.Where(n => n.OnlineNodeSettings?.IsOnline == true)
+                .Select(n => n.Id).ToHashSet(StringComparer.Ordinal);
+            var desired = new Dictionary<string, (string NodeId, DeviceConfiguration Device, MatterEndpointTemplate Template, string Signature)>(StringComparer.Ordinal);
             foreach (var node in _configurationService.NodeConfigurations ?? [])
-            {
                 foreach (var device in node.DeviceConfigurations ?? [])
-                {
                     foreach (var template in device.MatterEndpoints ?? [])
                     {
                         if (string.IsNullOrEmpty(template?.Id))
                             continue;
+                        var key = EndpointKey(device.Id, template.Id);
+                        var signature = Core.Utils.Json.SerializeIgnoreNulls(new { NodeId = node.Id, device.Name, Template = template });
+                        if (!desired.TryAdd(key, (node.Id, device, template, signature)))
+                            throw new InvalidOperationException($"Duplicate Matter endpoint declaration: {key}.");
+                    }
 
-                        try
-                        {
-                            var adapter = await AddDeviceAsync(bridge, node.Id, device, template, online, cancellationToken);
-                            adapters.Add(adapter);
+            var adapters = _adapters.ToList();
+            var mapChanged = false;
+            try
+            {
+                foreach (var adapter in adapters.ToArray())
+                {
+                    var key = EndpointKey(adapter.DeviceId, adapter.Template.Id);
+                    if (desired.TryGetValue(key, out var definition) &&
+                        _adapterSignatures.TryGetValue(key, out var signature) && signature == definition.Signature)
+                        continue;
+                    try
+                    {
+                        await bridge.RemoveBridgedDeviceAsync(adapter.Device, cancellationToken);
+                        adapters.Remove(adapter);
+                        _adapterSignatures.Remove(key);
+                    }
+                    catch (Exception x) when (x is not OperationCanceledException)
+                    {
+                        _logger?.LogError(x, "Matter endpoint {Endpoint} could not be removed during reconciliation", adapter.Template.Id);
+                    }
+                }
 
-                            var key = EndpointKey(device.Id, template.Id);
-                            var assigned = adapter.Device.EndpointId.Value;
-                            if (!_state.EndpointMap.TryGetValue(key, out var known) || known != assigned)
-                            {
-                                _state.EndpointMap[key] = assigned;
-                                mapChanged = true;
-                            }
-                        }
-                        catch (Exception x)
+                foreach (var (key, definition) in desired)
+                {
+                    if (adapters.Any(a => EndpointKey(a.DeviceId, a.Template.Id) == key))
+                        continue;
+                    try
+                    {
+                        var adapter = await AddDeviceAsync(bridge, definition.NodeId, definition.Device, definition.Template, online, cancellationToken);
+                        adapters.Add(adapter);
+                        _adapterSignatures[key] = definition.Signature;
+                        var assigned = adapter.Device.EndpointId.Value;
+                        if (!_state.EndpointMap.TryGetValue(key, out var known) || known != assigned)
                         {
-                            // One bad declaration must not cost the whole bridge its other endpoints.
-                            _logger?.LogError(x, "Matter endpoint {Endpoint} of device {DeviceId} could not be bridged",
-                                template.Id, device.Id);
+                            _state.EndpointMap[key] = assigned;
+                            mapChanged = true;
                         }
+                    }
+                    catch (Exception x) when (x is not OperationCanceledException)
+                    {
+                        _logger?.LogError(x, "Matter endpoint {Endpoint} of device {DeviceId} could not be bridged",
+                            definition.Template.Id, definition.Device.Id);
                     }
                 }
             }
-
-            _adapters = [.. adapters];
-
-            if (mapChanged)
+            finally
             {
-                _store.SaveState(_state);
+                lock (_presenceGate)
+                {
+                    _adapters = [.. adapters];
+                    var latestOnline = _onlineNodes.OnlineNodes.Where(n => n.OnlineNodeSettings?.IsOnline == true)
+                        .Select(n => n.Id).ToHashSet(StringComparer.Ordinal);
+                    foreach (var adapter in _adapters)
+                        adapter.SetReachable(latestOnline.Contains(adapter.NodeId));
+                }
+                if (mapChanged)
+                    _store.SaveState(_state);
             }
 
             _logger?.LogInformation("Matter bridge exposes {Count} bridged endpoint(s)", adapters.Count);
         }
 
         private async Task<RiotBridgedDeviceAdapter> AddDeviceAsync(
-            ControlBridgeService bridge,
+            RIoT2.Matter.ControlBridge.AggregatorEndpoint bridge,
             string nodeId,
             DeviceConfiguration device,
             MatterEndpointTemplate template,
@@ -490,6 +538,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
             var bridge = _bridge;
             var adapters = _adapters;
             _adapters = [];
+            _adapterSignatures.Clear();
 
             if (bridge is null)
                 return;

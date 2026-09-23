@@ -60,11 +60,11 @@ The internal rule CRUD, simulation, validation, function-execution, and function
 been removed. Use Elsa Studio to author workflows. Existing `StoredObjects/Rule` data is left
 untouched but is no longer loaded or executed; archive it separately if needed.
 
-Publish `RIoT2.Core` version `0.1.40` before building this orchestrator. Deploy the updated UI
+Publish `RIoT2.Core` version `0.1.41` before building this orchestrator. Deploy the updated UI
 together with the orchestrator: the old `POST api/Nodes/command/{type}` endpoint has been removed.
 Device commands now use `POST api/Command/execute` with `{ "id": "...", "value": ... }`.
 Missing or unknown command identifiers return HTTP 400 instead of silently succeeding.
-Publish `RIoT2.Matter` and `RIoT2.Matter.ControlBridge` version `0.1.13` before the container build
+Publish `RIoT2.Matter` and `RIoT2.Matter.ControlBridge` version `0.1.14` before the container build
 as well; the bridge package must consume the matching Matter library.
 
 ### Persistence and variable updates
@@ -99,7 +99,12 @@ Controllers are routed under `api/[controller]`.
 - `GET api/Matter/configuration` / `POST api/Matter/configuration` - read/save the bridge configuration.
 - `GET api/Matter/qr` - the onboarding payload rendered as a PNG QR code.
 - `GET api/Matter/commissioning/open` - re-open the pairing window.
-- `GET api/Matter/devices/refresh` - recompose the bridged endpoints from the current node configuration.
+- `GET api/Matter/devices/refresh` - reconcile bridged endpoints with the current node configuration.
+
+Node configuration creation, changes, and deletion also trigger reconciliation automatically.
+Unchanged endpoints remain attached; changed declarations reuse their persisted endpoint IDs.
+Node online/offline MQTT announcements update live endpoint reachability. The orchestrator republishes
+nonempty retained presence after each broker connection, allowing nodes to rediscover it after reconnect.
 - `GET api/Matter/reset` - decommission: drop every fabric and generate a new pairing code.
 
 ## MQTT

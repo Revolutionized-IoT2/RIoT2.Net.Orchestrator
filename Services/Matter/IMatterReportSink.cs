@@ -15,5 +15,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
     {
         /// <summary>Applies a device report to every bridged endpoint bound to it. Never throws.</summary>
         void OnReport(Report report);
+        void OnNodeOnlineChanged(string nodeId, bool isOnline);
+        Task OnConfigurationChangedAsync();
     }
 }
