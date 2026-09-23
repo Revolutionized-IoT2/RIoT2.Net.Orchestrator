@@ -1,5 +1,4 @@
 ﻿using System.Threading.Channels;
-using Grpc.Net.Client;
 using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Utils;
 using RIoT2.Core;
@@ -28,6 +27,7 @@ namespace RIoT2.Net.Orchestrator.Services
         private readonly CancellationTokenSource _cts;
         private readonly Task _consumerTask;
         private readonly Task _workflowTask;
+        private readonly WorkflowTriggerClient _workflowClient = new();
         private int _disposed;
 
         public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IMessageStateService deviceStateService, IStoredObjectService storedObjectService, IOnlineNodeService onlineNodeService, ILogger<OrchestratorMqttService> logger, IMatterReportSink matterSink = null, MqttClient mqttClient = null)
@@ -157,6 +157,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 _logger.LogError(x, "MQTT processing did not stop within five seconds");
             }
             LogAbandonedWork();
+            await _workflowClient.DisposeAsync();
             _client?.Dispose();
             _cts.Dispose();
         }
@@ -207,6 +208,7 @@ namespace RIoT2.Net.Orchestrator.Services
             _cts.Cancel();
             await _workflowTask;
             LogAbandonedWork();
+            await _workflowClient.DisposeAsync();
             await _client.Stop();
         }
 
@@ -287,10 +289,7 @@ namespace RIoT2.Net.Orchestrator.Services
         {
             try
             {
-                using var channel = GrpcChannel.ForAddress(url);
-                var client = new RIoTTriggerService.RIoTTriggerServiceClient(channel);
-                var response = await client.TriggerAsync(request,
-                    deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: cancellationToken);
+                var response = await _workflowClient.TriggerAsync(url, request, cancellationToken);
                 if (!response.Success)
                     _logger.LogWarning("Workflow engine did not accept report {ReportId}", request.Id);
             }

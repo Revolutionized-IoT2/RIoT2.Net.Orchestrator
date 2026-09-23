@@ -124,12 +124,17 @@ On `Start()` the orchestrator subscribes to wildcard topics for all nodes:
 
 | Purpose | Topic | Payload | Trigger |
 |---|---|---|---|
-| Orchestrator online | `Constants.Get("", MqttTopic.OrchestratorOnline)` | none (empty, **retained**) | Sent on `Start()` so nodes discover the orchestrator on (re)connect. |
+| Orchestrator online | `Constants.Get("", MqttTopic.OrchestratorOnline)` | `{"isOnline":true}` (**retained**) | Sent after every broker connection so nodes discover the orchestrator on (re)connect. |
 | Configuration command | `Constants.Get(nodeId, MqttTopic.Configuration)` | `ConfigurationCommand` (`ApiBaseUrl`) | Node comes online, or a `NodeDeviceConfiguration` is updated. |
 | Device command | `Constants.Get(nodeId, MqttTopic.Command)` | `Command` (`Id`, `Value`) | Requested by Elsa, the dashboard, or Matter; node id resolved via `FindNodeId`. |
 | Orchestrator report | `Constants.Get(OrchestratorConfiguration.Id, MqttTopic.Report)` | `Report` | Published when a `Variable` changes. |
 
 > Variable updates use the variable APIs, which may trigger report publication. Commands are serialized with `Json.SerializeIgnoreNulls(...)`.
+
+Workflow delivery owns one reusable gRPC channel, replacing it when the advertised destination
+changes and disposing it on shutdown. Transport ownership is isolated in `WorkflowTriggerClient`;
+the MQTT service still owns routing and its bounded workflow queue. The five-second deadline,
+no-automatic-retry policy, and explicit overflow/shutdown logs are unchanged.
 
 ## Matter Control Bridge
 
