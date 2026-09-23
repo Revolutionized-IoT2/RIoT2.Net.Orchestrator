@@ -8,8 +8,11 @@ ENV DOTNET_RUNNING_IN_CONTAINER=true
 ENV ASPNETCORE_HTTP_PORTS=80
 EXPOSE 80
 
-# This stage is used to build the service project
-FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine AS build
+# This stage is used to build the service project.
+# NOTE: the Debian-based SDK image is required (not -alpine): Grpc.Tools ships a glibc-linked
+# protoc, which cannot be executed on musl/Alpine. The publish output is portable (no RID,
+# UseAppHost=false), so it still runs on the Alpine runtime image used by the final stage.
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
 ARG NUGET_AUTH_TOKEN=token
 ARG NUGET_URL=https://nuget.pkg.github.com/Revolutionized-IoT2/index.json
