@@ -9,7 +9,7 @@ using RIoT2.Net.Orchestrator.Services.Matter;
 
 namespace RIoT2.Net.Orchestrator.Services
 {
-    internal class OrchestratorMqttService : IOrchestratorMqttService, IDisposable
+    internal class OrchestratorMqttService : IOrchestratorMqttService, IDisposable, IAsyncDisposable
     {
         private MqttClient _client;
         private readonly IOrchestratorConfigurationService _configuration;
@@ -24,8 +24,11 @@ namespace RIoT2.Net.Orchestrator.Services
 
         // Bounded queue decouples MQTT callback threads / event handlers from processing.
         private readonly Channel<Func<Task>> _workQueue;
+        private readonly Channel<Func<Task>> _workflowQueue;
         private readonly CancellationTokenSource _cts;
         private readonly Task _consumerTask;
+        private readonly Task _workflowTask;
+        private int _disposed;
 
         public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IMessageStateService deviceStateService, IStoredObjectService storedObjectService, IOnlineNodeService onlineNodeService, ILogger<OrchestratorMqttService> logger, IMatterReportSink matterSink = null)
         {
@@ -51,29 +54,44 @@ namespace RIoT2.Net.Orchestrator.Services
                 SingleWriter = false
             });
             _cts = new CancellationTokenSource();
-            _consumerTask = Task.Run(() => ProcessQueueAsync(_cts.Token));
+            _workflowQueue = Channel.CreateBounded<Func<Task>>(new BoundedChannelOptions(1000)
+            {
+                FullMode = BoundedChannelFullMode.Wait,
+                SingleReader = true,
+                SingleWriter = false
+            });
+            _consumerTask = ProcessQueueAsync(_workQueue.Reader, "MQTT", _cts.Token);
+            _workflowTask = ProcessQueueAsync(_workflowQueue.Reader, "workflow", _cts.Token);
 
             _storedObjectService.StoredObjectEvent += IStoredObjectService_StoredObjectEvent;
         }
 
         // Single consumer loop: sequential, centrally guarded processing of queued work.
-        private async Task ProcessQueueAsync(CancellationToken cancellationToken)
+        private async Task ProcessQueueAsync(ChannelReader<Func<Task>> reader, string queueName, CancellationToken cancellationToken)
         {
             try
             {
-                await foreach (var work in _workQueue.Reader.ReadAllAsync(cancellationToken))
+                while (await reader.WaitToReadAsync(cancellationToken))
                 {
-                    try
+                    while (!cancellationToken.IsCancellationRequested && reader.TryRead(out var work))
                     {
-                        await work();
+                        try
+                        {
+                            await work();
+                        }
+                        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                        {
+                            return;
+                        }
+                        catch (Exception x)
+                        {
+                            _logger.LogError(x, "Error while processing queued {Queue} work item", queueName);
+                        }
                     }
-                    catch (Exception x)
-                    {
-                        _logger.LogError(x, "Error while processing queued MQTT work item");
-                    }
+                    cancellationToken.ThrowIfCancellationRequested();
                 }
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 // Expected on shutdown.
             }
@@ -81,21 +99,32 @@ namespace RIoT2.Net.Orchestrator.Services
 
         private void Enqueue(Func<Task> work)
         {
-            if (!_workQueue.Writer.TryWrite(work))
-                _logger.LogWarning("Could not enqueue MQTT work item; queue is full or completed");
+            try
+            {
+                // The event contract is synchronous: apply backpressure instead of silently losing state.
+                _workQueue.Writer.WriteAsync(work, _cts.Token).AsTask().GetAwaiter().GetResult();
+            }
+            catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+            {
+                _logger.LogWarning("Could not enqueue MQTT work item; service is stopping");
+            }
+            catch (ChannelClosedException)
+            {
+                _logger.LogWarning("Could not enqueue MQTT work item; queue is completed");
+            }
         }
 
         void IStoredObjectService_StoredObjectEvent(Type type, dynamic obj, OperationType changeType)
         {
             //Send report when Variable changes
-            if (type == typeof(Variable) && changeType == OperationType.Updated)
+            if (type == typeof(Variable) && changeType is OperationType.Created or OperationType.Updated)
             {
                 var report = (obj as Variable).CreateReport();
                 Enqueue(() => SendReport(report));
             }
 
             //Send Configuration command to node if its configuration is being updated
-            if (type == typeof(NodeDeviceConfiguration) && changeType == OperationType.Updated)
+            if (type == typeof(NodeDeviceConfiguration) && changeType is OperationType.Created or OperationType.Updated)
             {
                 string id = (obj as NodeDeviceConfiguration).Id;
                 Enqueue(() => SendConfigurationCommand(id));
@@ -104,17 +133,27 @@ namespace RIoT2.Net.Orchestrator.Services
 
         public void Dispose()
         {
+            DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                return;
+
             _storedObjectService.StoredObjectEvent -= IStoredObjectService_StoredObjectEvent;
             _cts.Cancel();
             _workQueue.Writer.TryComplete();
+            _workflowQueue.Writer.TryComplete();
             try
             {
-                _consumerTask.Wait(TimeSpan.FromSeconds(5));
+                await Task.WhenAll(_consumerTask, _workflowTask).WaitAsync(TimeSpan.FromSeconds(5));
             }
-            catch
+            catch (TimeoutException x)
             {
-                // Ignore errors during shutdown of the consumer task.
+                _logger.LogError(x, "MQTT processing did not stop within five seconds");
             }
+            LogAbandonedWork();
             _client?.Dispose();
             _cts.Dispose();
         }
@@ -156,11 +195,28 @@ namespace RIoT2.Net.Orchestrator.Services
 
         public async Task Stop()
         {
+            _client.MessageReceived -= _client_MessageReceived;
+            _storedObjectService.StoredObjectEvent -= IStoredObjectService_StoredObjectEvent;
             _workQueue.Writer.TryComplete();
+            await _consumerTask;
+            _workflowQueue.Writer.TryComplete();
+            // Do not spend up to 1000 delivery deadlines draining a volatile queue on shutdown.
+            _cts.Cancel();
+            await _workflowTask;
+            LogAbandonedWork();
             await _client.Stop();
         }
 
-        // Callback stays lightweight: it only enqueues work and returns immediately.
+        private void LogAbandonedWork()
+        {
+            var count = 0;
+            while (_workflowQueue.Reader.TryRead(out _))
+                count++;
+            if (count > 0)
+                _logger.LogWarning("Discarded {Count} pending workflow deliveries during shutdown; no automatic replay", count);
+        }
+
+        // Only state processing can exert backpressure here; workflow delivery has its own bounded queue.
         private void _client_MessageReceived(MqttEventArgs mqttEventArgs)
         {
             Enqueue(() => HandleMessageAsync(mqttEventArgs));
@@ -192,17 +248,11 @@ namespace RIoT2.Net.Orchestrator.Services
                 var workflowNode = _onlineNodeService.OnlineNodes.FirstOrDefault(x => x.OnlineNodeSettings.IsOnline && x.OnlineNodeSettings.NodeType == NodeType.Workflow);
                 if (workflowNode != default)
                 {
-                    using var channel = GrpcChannel.ForAddress(workflowNode.OnlineNodeSettings.NodeBaseUrl);
-                    var client = new RIoTTriggerService.RIoTTriggerServiceClient(channel);
-
-                    var response = await client.TriggerAsync(new TriggerRequest
-                    {
-                        Id = report.Id,
-                        Data = report.ToJson()
-                    });
-
-                    if (!response.Success)
-                        _logger.LogWarning("Workflow engine did not accept report {ReportId}", report.Id);
+                    var settings = workflowNode.OnlineNodeSettings;
+                    var url = string.IsNullOrWhiteSpace(settings.GrpcBaseUrl) ? settings.NodeBaseUrl : settings.GrpcBaseUrl;
+                    var request = new TriggerRequest { Id = report.Id, Data = report.ToJson() };
+                    if (!_workflowQueue.Writer.TryWrite(() => DeliverWorkflowAsync(url, request, _cts.Token)))
+                        _logger.LogWarning("Workflow delivery queue is full or completed; report {ReportId} was not forwarded", report.Id);
                 }
                 else
                 {
@@ -226,6 +276,23 @@ namespace RIoT2.Net.Orchestrator.Services
                 }
                 else
                     _onlineNodeService.Remove(clientId);
+            }
+        }
+
+        private async Task DeliverWorkflowAsync(string url, TriggerRequest request, CancellationToken cancellationToken)
+        {
+            try
+            {
+                using var channel = GrpcChannel.ForAddress(url);
+                var client = new RIoTTriggerService.RIoTTriggerServiceClient(channel);
+                var response = await client.TriggerAsync(request,
+                    deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: cancellationToken);
+                if (!response.Success)
+                    _logger.LogWarning("Workflow engine did not accept report {ReportId}", request.Id);
+            }
+            catch (Exception x)
+            {
+                _logger.LogError(x, "Workflow delivery failed for report {ReportId}; not retried automatically", request.Id);
             }
         }
 

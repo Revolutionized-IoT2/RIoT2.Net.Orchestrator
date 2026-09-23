@@ -46,16 +46,34 @@ MQTT broker settings come from `OrchestratorConfiguration.Mqtt` (`ServerUrl`, `C
 Elsa 3 is now the only workflow engine. The `RIOT2_USE_EXTERNAL_WORKFLOW_ENGINE` environment
 variable and `UseExtWorkflowEngine` configuration property are no longer used. Every accepted report
 is stored and mirrored to Matter before being forwarded to the online workflow node. If no workflow
-node is online, a warning is logged; there is no internal fallback or replay queue.
+node is online, a warning is logged; there is no internal fallback or durable replay queue.
+
+Workflow delivery has a separate, ordered, in-memory queue of at most 1000 pending reports, with
+a five-second deadline per gRPC call. A stalled workflow does not block report state, Matter,
+or node presence processing. Overflow, rejected requests, delivery failures, and pending deliveries
+discarded at shutdown are logged explicitly. Delivery is not retried automatically because a
+timeout does not prove that a workflow was not started. The MQTT state-processing queue instead
+applies backpressure when full. Workflow nodes can advertise `GrpcBaseUrl`; older nodes fall back
+to `NodeBaseUrl`. Elsa deployments must expose their dedicated HTTP/2 port.
 
 The internal rule CRUD, simulation, validation, function-execution, and function-template APIs have
 been removed. Use Elsa Studio to author workflows. Existing `StoredObjects/Rule` data is left
 untouched but is no longer loaded or executed; archive it separately if needed.
 
-Publish `RIoT2.Core` version `0.1.39` before building this orchestrator. Deploy the updated UI
+Publish `RIoT2.Core` version `0.1.40` before building this orchestrator. Deploy the updated UI
 together with the orchestrator: the old `POST api/Nodes/command/{type}` endpoint has been removed.
 Device commands now use `POST api/Command/execute` with `{ "id": "...", "value": ... }`.
 Missing or unknown command identifiers return HTTP 400 instead of silently succeeding.
+Publish `RIoT2.Matter` and `RIoT2.Matter.ControlBridge` version `0.1.13` before the container build
+as well; the bridge package must consume the matching Matter library.
+
+### Persistence and variable updates
+
+Object writes flush a complete temporary file before atomically replacing the previous JSON file.
+A failed replacement preserves the previous durable value and does not emit a successful update.
+Node configuration APIs propagate save failures instead of returning an unsaved node ID.
+Variable report/command templates are read from current storage on each lookup, so creating,
+updating, or deleting a variable no longer requires an orchestrator restart.
 
 ## API Endpoints
 
@@ -109,6 +127,14 @@ On `Start()` the orchestrator subscribes to wildcard topics for all nodes:
 > Variable updates use the variable APIs, which may trigger report publication. Commands are serialized with `Json.SerializeIgnoreNulls(...)`.
 
 ## Matter Control Bridge
+
+### Upgrading persisted Matter fabrics
+
+Matter `0.1.13` persists the current ACL alongside fabric credentials. Legacy snapshots without
+ACL state are rejected rather than silently restoring the original commissioner's administrator
+access. Back up the existing Matter credentials/state before upgrading. An affected bridge must
+be reset and recommissioned using the existing Matter Reset action; do not treat a failed restore
+as a successful fresh startup. Reset removes the old commissioned identity and pairing state.
 
 The orchestrator can present itself to a Matter ecosystem (Google Home, Apple Home, Alexa) as a single
 **Control Bridge**, with every Matter-capable RIoT device exposed as a bridged endpoint under its

@@ -31,10 +31,25 @@ namespace RIoT2.Net.Orchestrator.Services.Persistence
         {
             var directory = EnsureTypeDirectory(typeName);
             var fullFileName = Path.Combine(directory.FullName, id + ".json");
+            var temporaryFileName = Path.Combine(directory.FullName, $".{Guid.NewGuid():N}.tmp");
+            try
+            {
+                using (var stream = new FileStream(temporaryFileName, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    using var writer = new StreamWriter(stream, leaveOpen: true);
+                    writer.Write(json);
+                    writer.Flush();
+                    stream.Flush(flushToDisk: true);
+                }
 
-            using var f = File.Create(fullFileName);
-            using var writer = new StreamWriter(f);
-            writer.Write(json);
+                // Keep the old file intact until the complete replacement is on the same filesystem.
+                File.Move(temporaryFileName, fullFileName, overwrite: true);
+            }
+            finally
+            {
+                if (File.Exists(temporaryFileName))
+                    File.Delete(temporaryFileName);
+            }
         }
 
         public void Delete(string typeName, string id)

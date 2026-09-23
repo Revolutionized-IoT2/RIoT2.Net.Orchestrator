@@ -11,7 +11,6 @@ namespace RIoT2.Net.Orchestrator.Services
         private ILogger _logger;
         private DashboardConfiguration _dashboardConfiguration;
         private IStoredObjectService _storedObjectService;
-        private IEnumerable<Variable> _variables = [];
 
         public OrchestratorConfigurationService(IStoredObjectService storedObjectService, ILogger<OrchestratorConfigurationService> logger) 
         {
@@ -54,7 +53,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 .SelectMany(d => d.CommandTemplates))
                 .ToList();
 
-            foreach (var v in _variables ?? [])
+            foreach (var v in _storedObjectService.GetAll<Variable>())
                 templates.Add(v.GetAsCommandTemplate());
 
             return templates;
@@ -69,13 +68,20 @@ namespace RIoT2.Net.Orchestrator.Services
                 .ToList();
 
             //Add variables to templates
-            foreach (var v in _variables ?? [])
+            foreach (var v in _storedObjectService.GetAll<Variable>())
                 templates.Add(v.GetAsReportTemplate());
 
             return templates;
         }
 
-        public DashboardConfiguration DashboardConfiguration { get { return _dashboardConfiguration; } }
+        public DashboardConfiguration DashboardConfiguration
+        {
+            get
+            {
+                refreshDashboardTemplates();
+                return _dashboardConfiguration;
+            }
+        }
 
         private void readOrchestratorConfiguration() 
         {
@@ -99,7 +105,6 @@ namespace RIoT2.Net.Orchestrator.Services
             {
                 _nodes = _storedObjectService.GetAll<NodeDeviceConfiguration>().ToList();
                 _dashboardConfiguration = _storedObjectService.GetAll<DashboardConfiguration>().FirstOrDefault();
-                _variables = _storedObjectService.GetAll<Variable>();
 
                 //Create default dashboard if there is nothing stored
                 if (_dashboardConfiguration == null) 
@@ -121,7 +126,7 @@ namespace RIoT2.Net.Orchestrator.Services
 
         private void refreshDashboardTemplates() 
         {
-            if (_nodes == null || _nodes.Count == 0)
+            if (_dashboardConfiguration == null)
                 return;
 
             var currentReportTemplates = GetReportTemplates();
@@ -194,9 +199,12 @@ namespace RIoT2.Net.Orchestrator.Services
                 }
             }
 
-            _storedObjectService.Save(configuration, true, false, true);
+            var id = _storedObjectService.Save(configuration, true, false, true);
+            if (string.IsNullOrEmpty(id))
+                return null;
+
             _nodes = _storedObjectService.GetAll<NodeDeviceConfiguration>().ToList();
-            return configuration.Id;
+            return id;
         }
         public string SaveDashboardConfiguration(string json)
         {
@@ -247,6 +255,9 @@ namespace RIoT2.Net.Orchestrator.Services
                 }
 
                 var id = _storedObjectService.Save(dashboard);
+                if (string.IsNullOrEmpty(id))
+                    return null;
+
                 _dashboardConfiguration = _storedObjectService.GetAll<DashboardConfiguration>().FirstOrDefault();
 
                 refreshDashboardTemplates();
