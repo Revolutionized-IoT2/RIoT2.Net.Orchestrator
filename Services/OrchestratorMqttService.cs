@@ -1,5 +1,4 @@
-﻿using System.Runtime.InteropServices;
-using System.Threading.Channels;
+﻿using System.Threading.Channels;
 using Grpc.Net.Client;
 using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Utils;
@@ -14,9 +13,8 @@ namespace RIoT2.Net.Orchestrator.Services
     {
         private MqttClient _client;
         private readonly IOrchestratorConfigurationService _configuration;
-        private readonly IRuleProcessorService _processorService;
         private readonly IMessageStateService _deviceStateService;
-        private readonly IStoredObjectService _ruleManagementService;
+        private readonly IStoredObjectService _storedObjectService;
         private readonly IOnlineNodeService _onlineNodeService;
         private readonly IMatterReportSink _matterSink;
         private readonly ILogger _logger;
@@ -29,12 +27,11 @@ namespace RIoT2.Net.Orchestrator.Services
         private readonly CancellationTokenSource _cts;
         private readonly Task _consumerTask;
 
-        public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IRuleProcessorService workflowService, IMessageStateService deviceStateService, IStoredObjectService ruleManagementService, IOnlineNodeService onlineNodeService, ILogger<OrchestratorMqttService> logger, IMatterReportSink matterSink = null)
+        public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IMessageStateService deviceStateService, IStoredObjectService storedObjectService, IOnlineNodeService onlineNodeService, ILogger<OrchestratorMqttService> logger, IMatterReportSink matterSink = null)
         {
             _logger = logger;
-            _ruleManagementService = ruleManagementService;
+            _storedObjectService = storedObjectService;
             _configuration = configuration;
-            _processorService = workflowService;
             _deviceStateService = deviceStateService;
             _onlineNodeService = onlineNodeService;
             _matterSink = matterSink;
@@ -56,7 +53,7 @@ namespace RIoT2.Net.Orchestrator.Services
             _cts = new CancellationTokenSource();
             _consumerTask = Task.Run(() => ProcessQueueAsync(_cts.Token));
 
-            _ruleManagementService.StoredObjectEvent += IStoredObjectService_StoredObjectEvent;
+            _storedObjectService.StoredObjectEvent += IStoredObjectService_StoredObjectEvent;
         }
 
         // Single consumer loop: sequential, centrally guarded processing of queued work.
@@ -107,7 +104,7 @@ namespace RIoT2.Net.Orchestrator.Services
 
         public void Dispose()
         {
-            _ruleManagementService.StoredObjectEvent -= IStoredObjectService_StoredObjectEvent;
+            _storedObjectService.StoredObjectEvent -= IStoredObjectService_StoredObjectEvent;
             _cts.Cancel();
             _workQueue.Writer.TryComplete();
             try
@@ -169,7 +166,7 @@ namespace RIoT2.Net.Orchestrator.Services
             Enqueue(() => HandleMessageAsync(mqttEventArgs));
         }
 
-        private async Task HandleMessageAsync(MqttEventArgs mqttEventArgs)
+        internal async Task HandleMessageAsync(MqttEventArgs mqttEventArgs)
         {
             if (MqttClient.IsMatch(mqttEventArgs.Topic, _reportTopic))
             {
@@ -192,52 +189,24 @@ namespace RIoT2.Net.Orchestrator.Services
 
                 //TODO validate report against template!
 
-                //Re-route report to External Workflow Engine if configured
-                if (_configuration.OrchestratorConfiguration.UseExtWorkflowEngine)
+                var workflowNode = _onlineNodeService.OnlineNodes.FirstOrDefault(x => x.OnlineNodeSettings.IsOnline && x.OnlineNodeSettings.NodeType == NodeType.Workflow);
+                if (workflowNode != default)
                 {
-                    var workflowNode = _onlineNodeService.OnlineNodes.FirstOrDefault(x => x.OnlineNodeSettings.IsOnline && x.OnlineNodeSettings.NodeType == NodeType.Workflow);
-                    if (workflowNode != default)
-                    {
-                        using var channel = GrpcChannel.ForAddress(workflowNode.OnlineNodeSettings.NodeBaseUrl);
-                        var client = new RIoTTriggerService.RIoTTriggerServiceClient(channel);
+                    using var channel = GrpcChannel.ForAddress(workflowNode.OnlineNodeSettings.NodeBaseUrl);
+                    var client = new RIoTTriggerService.RIoTTriggerServiceClient(channel);
 
-                        var response = await client.TriggerAsync(new TriggerRequest
-                        {
-                            Id = report.Id,
-                            Data = report.ToJson()
-                        });
-
-                        if (!response.Success)
-                            _logger.LogWarning("Workflow engine did not accept report {ReportId}", report.Id);
-                    }
-                    else
+                    var response = await client.TriggerAsync(new TriggerRequest
                     {
-                        _logger.LogWarning("Could not process report {ReportId} because no workflow node is online", report.Id);
-                    }
+                        Id = report.Id,
+                        Data = report.ToJson()
+                    });
+
+                    if (!response.Success)
+                        _logger.LogWarning("Workflow engine did not accept report {ReportId}", report.Id);
                 }
-                else // use internal rule processor
+                else
                 {
-                    var rules = new List<Rule>();
-                    foreach (var rule in _ruleManagementService.GetAll<Rule>())
-                    {
-                        if (!rule.IsActive)
-                            continue;
-
-                        if (rule.RuleItems == null || rule.RuleItems.Count < 2)
-                            continue;
-
-                        var trigger = rule.RuleItems.First() as RuleTrigger;
-                        if (trigger?.ReportId != report.Id)
-                            continue;
-
-                        if (!String.IsNullOrEmpty(report.Filter) && !String.IsNullOrEmpty(trigger?.Filter) && trigger?.Filter.ToLower() != report.Filter.ToLower())
-                            continue;
-
-                        rules.Add(rule);
-                    }
-
-                    if (rules.Count > 0)
-                        await _processorService.ProcessReportAsync(report, rules, processOutputs);
+                    _logger.LogWarning("Could not process report {ReportId} because no workflow node is online", report.Id);
                 }
             }
             else if (MqttClient.IsMatch(mqttEventArgs.Topic, _nodeOnlineTopic))
@@ -268,44 +237,23 @@ namespace RIoT2.Net.Orchestrator.Services
             };
         }
 
-        public async Task ProcessOutput(RuleEvaluationResult output) 
+        public async Task<bool> ExecuteCommand(Command command)
         {
-            if (String.IsNullOrEmpty(output.CommandId))
-                return;
-
-            if (output.Operation == OutputOperation.Variable)
+            if (command == null || String.IsNullOrWhiteSpace(command.Id))
             {
-                var outputVariable = _ruleManagementService.GetAll<Variable>().FirstOrDefault(x => x.Id == output.CommandId);
-                if (outputVariable == default)
-                    return;
-
-                outputVariable.ValueAsJson = output.Value.ToJson();
-                _ruleManagementService.Save(outputVariable);
-                return;
+                _logger.LogWarning("Could not execute command without an identifier");
+                return false;
             }
 
-            var outputNodeId = _configuration.FindNodeId(output.CommandId);
+            var outputNodeId = _configuration.FindNodeId(command.Id);
             if (String.IsNullOrEmpty(outputNodeId))
-                return;
-
-            var cmdTopic = Constants.Get(outputNodeId, MqttTopic.Command);
-
-            var cmd = new Command()
             {
-                Id = output.CommandId,
-                Value = output.Value
-            };
+                _logger.LogWarning("Could not find a node for command {CommandId}", command.Id);
+                return false;
+            }
 
-            await SendCommand(cmdTopic, cmd);
-        } 
-
-        private async Task processOutputs(List<RuleEvaluationResult> outputs)
-        {
-            List<Task> commandTasks = new List<Task>();
-            foreach (var output in outputs)
-                commandTasks.Add(ProcessOutput(output));
-
-            await Task.WhenAll(commandTasks);
+            await SendCommand(Constants.Get(outputNodeId, MqttTopic.Command), command);
+            return true;
         }
 
         //This method send orchestrator reports to mqtt

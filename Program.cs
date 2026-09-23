@@ -56,9 +56,7 @@ builder.Services.AddSingleton<Microsoft.Extensions.Logging.ILogger>(orchestrator
 builder.Services.AddSingleton<IObjectStore, FileObjectStore>();
 builder.Services.AddSingleton<IOrchestratorConfigurationService, OrchestratorConfigurationService>();
 builder.Services.AddSingleton<IOnlineNodeService, OnlineNodeService>();
-builder.Services.AddSingleton<IRuleProcessorService, RuleProcessorService>();
 builder.Services.AddSingleton<IStoredObjectService, StoredObjectService>();
-builder.Services.AddSingleton<IFunctionService, FunctionService>();
 builder.Services.AddSingleton<IMessageStateService, MessageStateService>();
 builder.Services.AddSingleton<IOrchestratorMqttService, OrchestratorMqttService>();
 

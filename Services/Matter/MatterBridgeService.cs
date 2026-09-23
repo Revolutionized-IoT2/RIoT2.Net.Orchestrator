@@ -523,10 +523,9 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
                 return Task.CompletedTask;
             }
 
-            return mqtt.ProcessOutput(new RuleEvaluationResult
+            return mqtt.ExecuteCommand(new Command
             {
-                Operation = OutputOperation.Set_value,
-                CommandId = binding.CommandTemplateId,
+                Id = binding.CommandTemplateId,
                 Value = value
             });
         }

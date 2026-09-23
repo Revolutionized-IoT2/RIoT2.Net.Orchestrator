@@ -1,13 +1,13 @@
 # RIoT2.Net.Orchestrator
 
-The central orchestrator for the **RIoT2** IoT platform. It is an ASP.NET Core Web API (targeting **.NET 9**) that manages IoT nodes and devices, processes rules, maintains message/variable state, and communicates with nodes over MQTT.
+The central orchestrator for the **RIoT2** IoT platform. It is an ASP.NET Core Web API (targeting **.NET 9**) that manages IoT nodes and devices, forwards reports to Elsa 3 for automation, maintains message/variable state, and communicates with nodes over MQTT.
 
 ## Overview
 
 The orchestrator is responsible for:
 
 - **Node management** � tracking online/offline nodes and pushing configuration to them.
-- **Rule processing** � evaluating rules against incoming device reports and producing commands (internal `IRuleProcessorService`, or an external workflow engine when `UseExtWorkflowEngine` is enabled).
+- **Automation** - forwarding incoming device reports to the online Elsa 3 workflow node over gRPC.
 - **State management** � maintaining the current state of reports, commands, and variables.
 - **MQTT messaging** � bidirectional communication with nodes/devices (see [MQTT](#mqtt)).
 - **Dashboard configuration** � serving dashboard layout/config to clients.
@@ -32,9 +32,7 @@ The app uses the ASP.NET Core minimal hosting model (`Program.cs`):
 |---|---|---|
 | `IOrchestratorConfigurationService` | `OrchestratorConfigurationService` | Loads orchestrator + node configuration, manifest, dashboard, and resolves report/command templates. |
 | `IOnlineNodeService` | `OnlineNodeService` | Tracks currently online nodes. |
-| `IRuleProcessorService` | `RuleProcessorService` | Evaluates rules and produces command outputs. |
-| `IStoredObjectService` | `StoredObjectService` | Generic persistence for stored objects (e.g. `Rule`, `Variable`). |
-| `IFunctionService` | `FunctionService` | Function execution used by rules. |
+| `IStoredObjectService` | `StoredObjectService` | Generic persistence for stored objects (e.g. `Variable`). |
 | `IMessageStateService` | `MessageStateService` | Maintains current report/command/variable state. |
 | `IOrchestratorMqttService` | `OrchestratorMqttService` | MQTT broker communication. |
 | `IMatterBridgeService` | `MatterBridgeService` | Hosts the Matter Control Bridge and exposes RIoT devices as bridged Matter endpoints (see [Matter Control Bridge](#matter-control-bridge)). |
@@ -43,17 +41,28 @@ The app uses the ASP.NET Core minimal hosting model (`Program.cs`):
 
 MQTT broker settings come from `OrchestratorConfiguration.Mqtt` (`ServerUrl`, `ClientId`, `Username`, `Password`). The orchestrator's own identity/URL come from `OrchestratorConfiguration` (`Id`, `Url`).
 
+### Retiring the internal workflow engine
+
+Elsa 3 is now the only workflow engine. The `RIOT2_USE_EXTERNAL_WORKFLOW_ENGINE` environment
+variable and `UseExtWorkflowEngine` configuration property are no longer used. Every accepted report
+is stored and mirrored to Matter before being forwarded to the online workflow node. If no workflow
+node is online, a warning is logged; there is no internal fallback or replay queue.
+
+The internal rule CRUD, simulation, validation, function-execution, and function-template APIs have
+been removed. Use Elsa Studio to author workflows. Existing `StoredObjects/Rule` data is left
+untouched but is no longer loaded or executed; archive it separately if needed.
+
+Publish `RIoT2.Core` version `0.1.39` before building this orchestrator. Deploy the updated UI
+together with the orchestrator: the old `POST api/Nodes/command/{type}` endpoint has been removed.
+Device commands now use `POST api/Command/execute` with `{ "id": "...", "value": ... }`.
+Missing or unknown command identifiers return HTTP 400 instead of silently succeeding.
+
 ## API Endpoints
 
 Controllers are routed under `api/[controller]`.
 
 ### `api/Nodes`
 - `GET api/Nodes` � list configured nodes and their status.
-
-### `api/Rules`
-- `GET api/Rules` � list rules (id, name, description, active state, tags).
-- `GET api/Rules/tags` � list distinct rule tags.
-- `POST api/Rules/save` � create/update a rule.
 
 ### `api/Variable`
 - `GET api/Variable/templates` � list variable templates.
@@ -85,7 +94,7 @@ On `Start()` the orchestrator subscribes to wildcard topics for all nodes:
 
 | Purpose | Topic key | Subscription | Payload | Handling |
 |---|---|---|---|---|
-| Device reports | `MqttTopic.Report` | `Constants.Get("+", MqttTopic.Report)` | `Report` | Stored via `IMessageStateService`; routed to the external workflow engine (if `UseExtWorkflowEngine`) or the internal `IRuleProcessorService`. Reports without a matching template are ignored. |
+| Device reports | `MqttTopic.Report` | `Constants.Get("+", MqttTopic.Report)` | `Report` | Stored via `IMessageStateService`, mirrored to Matter, then forwarded to the online Elsa 3 workflow node. Reports without a matching template are ignored. |
 | Node online/offline | `MqttTopic.NodeOnline` | `Constants.Get("+", MqttTopic.NodeOnline)` | `NodeOnlineMessage` | Node added to / removed from `IOnlineNodeService`; a configuration command is sent when a node comes online. |
 
 ### Publications (Orchestrator ? Node)
@@ -94,10 +103,10 @@ On `Start()` the orchestrator subscribes to wildcard topics for all nodes:
 |---|---|---|---|
 | Orchestrator online | `Constants.Get("", MqttTopic.OrchestratorOnline)` | none (empty, **retained**) | Sent on `Start()` so nodes discover the orchestrator on (re)connect. |
 | Configuration command | `Constants.Get(nodeId, MqttTopic.Configuration)` | `ConfigurationCommand` (`ApiBaseUrl`) | Node comes online, or a `NodeDeviceConfiguration` is updated. |
-| Device command | `Constants.Get(nodeId, MqttTopic.Command)` | `Command` (`Id`, `Value`) | Produced by rule outputs; node id resolved via `FindNodeId`. |
+| Device command | `Constants.Get(nodeId, MqttTopic.Command)` | `Command` (`Id`, `Value`) | Requested by Elsa, the dashboard, or Matter; node id resolved via `FindNodeId`. |
 | Orchestrator report | `Constants.Get(OrchestratorConfiguration.Id, MqttTopic.Report)` | `Report` | Published when a `Variable` changes. |
 
-> Note: rule outputs with `OutputOperation.Variable` are not published to MQTT � they update a stored `Variable` internally (which may in turn trigger a report publication). Commands are serialized with `Json.SerializeIgnoreNulls(...)`.
+> Variable updates use the variable APIs, which may trigger report publication. Commands are serialized with `Json.SerializeIgnoreNulls(...)`.
 
 ## Matter Control Bridge
 
@@ -118,7 +127,7 @@ template. See `RIoT2.Net.Devices/Catalog/Hue.cs` for the reference implementatio
 The two directions are:
 
 - **Google Home -> RIoT:** a cluster attribute is written by a Matter Invoke, the adapter resolves the
-  matching `MatterCommandBinding` and calls `IOrchestratorMqttService.ProcessOutput`, which publishes
+  matching `MatterCommandBinding` and calls `IOrchestratorMqttService.ExecuteCommand`, which publishes
   the usual device `Command`.
 - **RIoT -> Google Home:** `OrchestratorMqttService` mirrors every accepted `Report` into the bridge,
   the adapter writes the scaled value onto the cluster attribute, and the Matter stack turns that into

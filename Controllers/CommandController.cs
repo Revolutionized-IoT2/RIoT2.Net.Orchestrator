@@ -1,7 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using RIoT2.Core;
+﻿using Microsoft.AspNetCore.Mvc;
 using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Models;
 using RIoT2.Core.Utils;
@@ -13,8 +10,6 @@ namespace RIoT2.Net.Orchestrator.Controllers
     [ApiController]
     public class CommandController : ControllerBase
     {
-        //TODO MOVE all command APIs to this ctrl
-
         private readonly IOrchestratorConfigurationService _configuration;
         private readonly IMessageStateService _messageStateService;
         private readonly IOrchestratorMqttService _mqtt;
@@ -99,13 +94,8 @@ namespace RIoT2.Net.Orchestrator.Controllers
             if (cmd == null)
                 return BadRequest();
 
-            var op = OutputOperation.Set_value; //TODO get Operation from template... or from command?
-            await _mqtt.ProcessOutput(new RuleEvaluationResult()
-            {
-                Value = cmd.Value,
-                CommandId = cmd.Id,
-                Operation = op
-            });
+            if (!await _mqtt.ExecuteCommand(cmd))
+                return BadRequest($"Could not find a node for command with ID: {cmd.Id}");
 
             return new OkResult();
         }

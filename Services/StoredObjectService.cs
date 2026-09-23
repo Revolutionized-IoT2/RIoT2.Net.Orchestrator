@@ -108,6 +108,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 op = OperationType.Created;
                 if (_objects.ContainsKey(t))
                 {
+                    _objects[t].RemoveAll(x => x.Id == id);
                     _objects[t].Add(obj);
                     op = OperationType.Updated;
                 }
