@@ -6,11 +6,11 @@ The central orchestrator for the **RIoT2** IoT platform. It is an ASP.NET Core W
 
 The orchestrator is responsible for:
 
-- **Node management** – tracking online/offline nodes and pushing configuration to them.
-- **Rule processing** – evaluating rules against incoming device reports and producing commands (internal `IRuleProcessorService`, or an external workflow engine when `UseExtWorkflowEngine` is enabled).
-- **State management** – maintaining the current state of reports, commands, and variables.
-- **MQTT messaging** – bidirectional communication with nodes/devices (see [MQTT](#mqtt)).
-- **Dashboard configuration** – serving dashboard layout/config to clients.
+- **Node management** ï¿½ tracking online/offline nodes and pushing configuration to them.
+- **Rule processing** ï¿½ evaluating rules against incoming device reports and producing commands (internal `IRuleProcessorService`, or an external workflow engine when `UseExtWorkflowEngine` is enabled).
+- **State management** ï¿½ maintaining the current state of reports, commands, and variables.
+- **MQTT messaging** ï¿½ bidirectional communication with nodes/devices (see [MQTT](#mqtt)).
+- **Dashboard configuration** ï¿½ serving dashboard layout/config to clients.
 
 Shared interfaces and models (`RIoT2.Core`) are consumed from a private GitHub NuGet feed.
 
@@ -18,13 +18,13 @@ Shared interfaces and models (`RIoT2.Core`) are consumed from a private GitHub N
 
 The app uses the ASP.NET Core minimal hosting model (`Program.cs`):
 
-- **Logging** – Serilog, writing to console and a rolling file at `Logs/RIoT2.log`.
-- **JSON** – controllers use custom named JSON option profiles selectable via the `json-naming-policy` request header:
+- **Logging** ï¿½ Serilog, writing to console and a rolling file at `Logs/RIoT2.log`.
+- **JSON** ï¿½ controllers use custom named JSON option profiles selectable via the `json-naming-policy` request header:
   - default ? camelCase
   - `pascal` ? original/PascalCase
   - `lower` ? lowercase
-- **Background service** – `MqttBackgroundService` (`IHostedService`) starts/stops the MQTT service with the app lifetime.
-- **CORS** – a permissive default policy (`AllowAnyOrigin/Method/Header`).
+- **Background service** ï¿½ `MqttBackgroundService` (`IHostedService`) starts/stops the MQTT service with the app lifetime.
+- **CORS** ï¿½ a permissive default policy (`AllowAnyOrigin/Method/Header`).
 
 ### Core services (registered as singletons)
 
@@ -37,6 +37,7 @@ The app uses the ASP.NET Core minimal hosting model (`Program.cs`):
 | `IFunctionService` | `FunctionService` | Function execution used by rules. |
 | `IMessageStateService` | `MessageStateService` | Maintains current report/command/variable state. |
 | `IOrchestratorMqttService` | `OrchestratorMqttService` | MQTT broker communication. |
+| `IMatterBridgeService` | `MatterBridgeService` | Hosts the Matter Control Bridge and exposes RIoT devices as bridged Matter endpoints (see [Matter Control Bridge](#matter-control-bridge)). |
 
 ## Configuration
 
@@ -47,24 +48,32 @@ MQTT broker settings come from `OrchestratorConfiguration.Mqtt` (`ServerUrl`, `C
 Controllers are routed under `api/[controller]`.
 
 ### `api/Nodes`
-- `GET api/Nodes` – list configured nodes and their status.
+- `GET api/Nodes` ï¿½ list configured nodes and their status.
 
 ### `api/Rules`
-- `GET api/Rules` – list rules (id, name, description, active state, tags).
-- `GET api/Rules/tags` – list distinct rule tags.
-- `POST api/Rules/save` – create/update a rule.
+- `GET api/Rules` ï¿½ list rules (id, name, description, active state, tags).
+- `GET api/Rules/tags` ï¿½ list distinct rule tags.
+- `POST api/Rules/save` ï¿½ create/update a rule.
 
 ### `api/Variable`
-- `GET api/Variable/templates` – list variable templates.
+- `GET api/Variable/templates` ï¿½ list variable templates.
 
 ### `api/Report`
-- `GET api/Report/{id}/value` – current or default value of a report/variable/command.
+- `GET api/Report/{id}/value` ï¿½ current or default value of a report/variable/command.
 
 ### `api/Command`
 - Command APIs (send/read command values).
 
 ### `api/Dashboard`
-- `GET api/Dashboard/configuration` – dashboard configuration (optional `?history=true`).
+- `GET api/Dashboard/configuration` ï¿½ dashboard configuration (optional `?history=true`).
+
+### `api/Matter`
+- `GET api/Matter/status` - bridge state: running, onboarding codes, commissioned fabrics, bridged endpoints.
+- `GET api/Matter/configuration` / `POST api/Matter/configuration` - read/save the bridge configuration.
+- `GET api/Matter/qr` - the onboarding payload rendered as a PNG QR code.
+- `GET api/Matter/commissioning/open` - re-open the pairing window.
+- `GET api/Matter/devices/refresh` - recompose the bridged endpoints from the current node configuration.
+- `GET api/Matter/reset` - decommission: drop every fabric and generate a new pairing code.
 
 ## MQTT
 
@@ -88,7 +97,69 @@ On `Start()` the orchestrator subscribes to wildcard topics for all nodes:
 | Device command | `Constants.Get(nodeId, MqttTopic.Command)` | `Command` (`Id`, `Value`) | Produced by rule outputs; node id resolved via `FindNodeId`. |
 | Orchestrator report | `Constants.Get(OrchestratorConfiguration.Id, MqttTopic.Report)` | `Report` | Published when a `Variable` changes. |
 
-> Note: rule outputs with `OutputOperation.Variable` are not published to MQTT — they update a stored `Variable` internally (which may in turn trigger a report publication). Commands are serialized with `Json.SerializeIgnoreNulls(...)`.
+> Note: rule outputs with `OutputOperation.Variable` are not published to MQTT ï¿½ they update a stored `Variable` internally (which may in turn trigger a report publication). Commands are serialized with `Json.SerializeIgnoreNulls(...)`.
+
+## Matter Control Bridge
+
+The orchestrator can present itself to a Matter ecosystem (Google Home, Apple Home, Alexa) as a single
+**Control Bridge**, with every Matter-capable RIoT device exposed as a bridged endpoint under its
+aggregator. It is off by default; enable it in the RIoT UI's *Matter* view or by posting
+`{ "enabled": true }` to `api/Matter/configuration`.
+
+### How a device becomes a Matter endpoint
+
+A node plugin implements `RIoT2.Core.Interfaces.IMatterDevice` and returns one or more
+`MatterEndpointTemplate` descriptors for the configuration it was given. The node surfaces them on
+`GET /api/device/configuration/templates`, and they travel to the orchestrator as
+`DeviceConfiguration.MatterEndpoints` through the normal template import / node configuration save.
+`MatterBridgeService` walks the stored node configurations and adds one bridged endpoint per declared
+template. See `RIoT2.Net.Devices/Catalog/Hue.cs` for the reference implementation.
+
+The two directions are:
+
+- **Google Home -> RIoT:** a cluster attribute is written by a Matter Invoke, the adapter resolves the
+  matching `MatterCommandBinding` and calls `IOrchestratorMqttService.ProcessOutput`, which publishes
+  the usual device `Command`.
+- **RIoT -> Google Home:** `OrchestratorMqttService` mirrors every accepted `Report` into the bridge,
+  the adapter writes the scaled value onto the cluster attribute, and the Matter stack turns that into
+  a subscription report.
+
+### Configuration
+
+`MatterConfiguration` (persisted through `IObjectStore`, editable from the UI):
+
+| Setting | Meaning |
+|---|---|
+| `Enabled` | Whether the bridge starts with the orchestrator. |
+| `NodeLabel` | The name a commissioner shows for the bridge itself. |
+| `VendorId` / `ProductId` | The Matter identity, encoded into the onboarding codes. Defaults are the CSA test VID `0xFFF1` and PID `0x8000`. |
+| `Discriminator` | The 12-bit setup discriminator advertised over DNS-SD. |
+| `AttestationPath` | A directory holding operator-supplied `dac.der`, `pai.der`, `cd.der` and `dac-key.pem`. Empty means TEST credentials are generated for the configured VID/PID. |
+| `CredentialsDirectory` | Where generated credentials and the persisted fabric table are written (relative to the content root when not rooted). |
+| `FabricStoreKey` | The passphrase sealing the persisted fabric table. Generated once; changing it loses every commissioned fabric. |
+
+The setup passcode, PBKDF salt and the endpoint id map are held separately in `MatterBridgeState`, so
+saving configuration from the UI never invalidates a printed QR code and never re-numbers endpoints a
+controller has already learned.
+
+### Prerequisites
+
+- **Google Home requires a Developer Console project.** Google Home only commissions an uncertified
+  Matter device whose Vendor ID / Product ID are registered as an integration in the
+  [Google Home Developer Console](https://console.home.google.com/). Register the configured VID/PID
+  pair (by default the test VID `0xFFF1`) before pairing, or commissioning will fail.
+- **Network.** IPv6 is mandatory. UDP 5540 (operational) and UDP 5353 (mDNS) must be reachable, and the
+  commissioner must be on the same L2 segment. In Docker the orchestrator must run with
+  `network_mode: host` - bridge networking breaks mDNS and IPv6 link-local discovery.
+- **Packaging.** `RIoT2.Matter` and `RIoT2.Matter.ControlBridge` must be published to the private GitHub
+  NuGet feed and referenced as packages before a container build; the Dockerfile restores from that feed
+  and cannot see a `ProjectReference`.
+
+### Known gaps
+
+Inherited from `RIoT2.Matter` and not closed by the bridge: no BLE/BTP transport (on-network
+commissioning only, so the commissioner must already be on the same network), no group-cast security
+path, and no Wi-Fi/Thread network commissioning.
 
 ## Debugging / running locally
 

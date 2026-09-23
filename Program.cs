@@ -3,6 +3,7 @@ using RIoT2.Core.Models;
 using RIoT2.Core.Services;
 using RIoT2.Net.Orchestrator.CustomJsonSettings;
 using RIoT2.Net.Orchestrator.Services;
+using RIoT2.Net.Orchestrator.Services.Matter;
 using RIoT2.Net.Orchestrator.Services.Persistence;
 using System.Text.Json;
 using Serilog;
@@ -61,8 +62,17 @@ builder.Services.AddSingleton<IFunctionService, FunctionService>();
 builder.Services.AddSingleton<IMessageStateService, MessageStateService>();
 builder.Services.AddSingleton<IOrchestratorMqttService, OrchestratorMqttService>();
 
+// Matter Control Bridge. One instance serves both interfaces: the bridge the UI drives, and the
+// report sink OrchestratorMqttService pushes device reports into.
+builder.Services.AddSingleton<MatterConfigurationStore>();
+builder.Services.AddSingleton<IMatterBridgeService, MatterBridgeService>();
+builder.Services.AddSingleton<IMatterReportSink>(s => s.GetRequiredService<IMatterBridgeService>());
+
 //Start Mqtt Background service...
 builder.Services.AddHostedService<MqttBackgroundService>();
+
+//Start the Matter bridge with the application (it does nothing when disabled in its configuration)...
+builder.Services.AddHostedService<MatterBackgroundService>();
 
 builder.Services.AddCors(options =>
 {
