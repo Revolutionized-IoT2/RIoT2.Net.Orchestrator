@@ -34,7 +34,7 @@ This file provides guidance to Claude Code (and other AI coding agents) when wor
 - `MatterBackgroundService` (`IHostedService`) — starts/stops the Matter bridge with the app lifetime; it is a no-op while the bridge is disabled in its configuration.
 
 Service interfaces and shared models come from the external `RIoT2.Core` package.
-Use Core `0.1.40` for the additive workflow `GrpcBaseUrl` announcement field and lossless
+Use Core `0.1.41` for reconnect presence, snapshot-safe state, the additive workflow `GrpcBaseUrl` announcement field and lossless
 integer/text message decoding. Workflow delivery is isolated in a bounded in-memory queue with
 a five-second deadline and no automatic retry; preserve that policy when changing report routing.
 
