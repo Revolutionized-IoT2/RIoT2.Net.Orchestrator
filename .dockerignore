@@ -19,6 +19,9 @@
 **/node_modules
 **/npm-debug.log
 **/obj
+Logs
+MatterCredentials
+StoredObjects
 **/secrets.dev.yaml
 **/values.dev.yaml
 LICENSE

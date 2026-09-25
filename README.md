@@ -1,225 +1,201 @@
 # RIoT2.Net.Orchestrator
 
-The central orchestrator for the **RIoT2** IoT platform. It is an ASP.NET Core Web API (targeting **.NET 9**) that manages IoT nodes and devices, forwards reports to Elsa 3 for automation, maintains message/variable state, and communicates with nodes over MQTT.
+Central ASP.NET Core Web API for the RIoT2 IoT platform. It targets .NET 9, stores node/dashboard/variable configuration on disk, tracks online nodes, routes MQTT reports/commands, forwards accepted reports to Elsa 3 over gRPC, and can expose RIoT devices through the Matter Control Bridge.
 
-## Overview
+## Runtime configuration
 
-The orchestrator is responsible for:
+The orchestrator reads these environment variables at startup:
 
-- **Node management** � tracking online/offline nodes and pushing configuration to them.
-- **Automation** - forwarding incoming device reports to the online Elsa 3 workflow node over gRPC.
-- **State management** � maintaining the current state of reports, commands, and variables.
-- **MQTT messaging** � bidirectional communication with nodes/devices (see [MQTT](#mqtt)).
-- **Dashboard configuration** � serving dashboard layout/config to clients.
+| Variable | Required | Meaning |
+|---|---:|---|
+| `RIOT2_ORCHESTRATOR_ID` | Yes | MQTT client id and the id used when publishing orchestrator-owned variable reports. |
+| `RIOT2_ORCHESTRATOR_URL` | Yes | Base HTTP URL sent to nodes in `ConfigurationCommand.ApiBaseUrl`. |
+| `RIOT2_MQTT_IP` | Yes | MQTT broker host/IP. Port is currently fixed by `RIoT2.Core.Utils.MqttClient` at `1883`. |
+| `RIOT2_MQTT_USERNAME` | No | MQTT username. |
+| `RIOT2_MQTT_PASSWORD` | No | MQTT password. |
+| `ASPNETCORE_HTTP_PORTS` / `ASPNETCORE_URLS` | Hosting | ASP.NET Core listen configuration. The Dockerfile defaults to HTTP port `8080`. |
+| `ASPNETCORE_ENVIRONMENT` | Hosting | `Development`, `Production`, etc. |
+| `TZ` | Optional | Container timezone; the Dockerfile defaults to `Europe/Helsinki`. |
 
-Shared interfaces and models (`RIoT2.Core`) are consumed from a private GitHub NuGet feed.
+`RIOT2_USE_EXTERNAL_WORKFLOW_ENGINE` is obsolete and is not read. Elsa 3 is the only workflow engine.
 
-## Architecture
+Startup fails fast when `RIOT2_ORCHESTRATOR_ID`, `RIOT2_ORCHESTRATOR_URL`, or `RIOT2_MQTT_IP` is missing. `RIOT2_ORCHESTRATOR_URL` must be an absolute `http://` or `https://` URL. MQTT username/password can be empty when the broker allows anonymous clients.
 
-The app uses the ASP.NET Core minimal hosting model (`Program.cs`):
+## Storage
 
-- **Logging** � Serilog, writing to console and a rolling file at `Logs/RIoT2.log`.
-- **JSON** � controllers use custom named JSON option profiles selectable via the `json-naming-policy` request header:
-  - default ? camelCase
-  - `pascal` ? original/PascalCase
-  - `lower` ? lowercase
-- **Background service** � `MqttBackgroundService` (`IHostedService`) starts/stops the MQTT service with the app lifetime.
-- **CORS** � a permissive default policy (`AllowAnyOrigin/Method/Header`).
+`FileObjectStore` persists JSON under `<content-root>\StoredObjects\<Type>\<Id>.json`.
 
-### Core services (registered as singletons)
+- Writes use a complete same-directory temporary file and then replace the target file.
+- Type names and object ids are validated as file names; path separators and traversal segments are rejected.
+- `MatterConfiguration` and `MatterBridgeState` are stored through the same object-store abstraction.
+- Matter generated credentials and the fabric store are written under `MatterConfiguration.CredentialsDirectory`, which must be relative to the content root (default `MatterCredentials`).
+- Runtime folders such as `StoredObjects`, `Logs`, and `MatterCredentials` are excluded from Docker build context.
+
+## Services
+
+Registered as singletons in `Program.cs`:
 
 | Interface | Implementation | Responsibility |
 |---|---|---|
-| `IOrchestratorConfigurationService` | `OrchestratorConfigurationService` | Loads orchestrator + node configuration, manifest, dashboard, and resolves report/command templates. |
-| `IOnlineNodeService` | `OnlineNodeService` | Tracks currently online nodes. |
-| `IStoredObjectService` | `StoredObjectService` | Generic persistence for stored objects (e.g. `Variable`). |
-| `IMessageStateService` | `MessageStateService` | Maintains current report/command/variable state. |
-| `IOrchestratorMqttService` | `OrchestratorMqttService` | MQTT broker communication. |
-| `IMatterBridgeService` | `MatterBridgeService` | Hosts the Matter Control Bridge and exposes RIoT devices as bridged Matter endpoints (see [Matter Control Bridge](#matter-control-bridge)). |
+| `IOrchestratorConfigurationService` | `OrchestratorConfigurationService` | Loads env configuration and stored node/dashboard configuration; resolves report/command templates. |
+| `IOnlineNodeService` | `OnlineNodeService` | Tracks online nodes and calls node REST APIs for device templates/status. |
+| `IStoredObjectService` | `StoredObjectService` | Cached generic persistence with change events. |
+| `IMessageStateService` | `MessageStateService` from `RIoT2.Core` | Current report/command state and report history. |
+| `IOrchestratorMqttService` | `OrchestratorMqttService` | MQTT connection, routing, command/report publishing. |
+| `IMatterBridgeService` / `IMatterReportSink` | `MatterBridgeService` | Matter Control Bridge and report mirroring. |
 
-## Configuration
+Hosted services:
 
-MQTT broker settings come from `OrchestratorConfiguration.Mqtt` (`ServerUrl`, `ClientId`, `Username`, `Password`). The orchestrator's own identity/URL come from `OrchestratorConfiguration` (`Id`, `Url`).
+- `MqttBackgroundService` starts/stops MQTT.
+- `MatterBackgroundService` starts/stops the Matter bridge when enabled.
 
-### Retiring the internal workflow engine
+## REST API
 
-Elsa 3 is now the only workflow engine. The `RIOT2_USE_EXTERNAL_WORKFLOW_ENGINE` environment
-variable and `UseExtWorkflowEngine` configuration property are no longer used. Every accepted report
-is stored and mirrored to Matter before being forwarded to the online workflow node. If no workflow
-node is online, a warning is logged; there is no internal fallback or durable replay queue.
-
-Workflow delivery has a separate, ordered, in-memory queue of at most 1000 pending reports, with
-a five-second deadline per gRPC call. A stalled workflow does not block report state, Matter,
-or node presence processing. Overflow, rejected requests, delivery failures, and pending deliveries
-discarded at shutdown are logged explicitly. Delivery is not retried automatically because a
-timeout does not prove that a workflow was not started. The MQTT state-processing queue instead
-applies backpressure when full. Workflow nodes can advertise `GrpcBaseUrl`; older nodes fall back
-to `NodeBaseUrl`. Elsa deployments must expose their dedicated HTTP/2 port.
-
-The internal rule CRUD, simulation, validation, function-execution, and function-template APIs have
-been removed. Use Elsa Studio to author workflows. Existing `StoredObjects/Rule` data is left
-untouched but is no longer loaded or executed; archive it separately if needed.
-
-Publish `RIoT2.Core` version `0.1.41` before building this orchestrator. Deploy the updated UI
-together with the orchestrator: the old `POST api/Nodes/command/{type}` endpoint has been removed.
-Device commands now use `POST api/Command/execute` with `{ "id": "...", "value": ... }`.
-Missing or unknown command identifiers return HTTP 400 instead of silently succeeding.
-Publish `RIoT2.Matter` and `RIoT2.Matter.ControlBridge` version `0.1.14` before the container build
-as well; the bridge package must consume the matching Matter library.
-
-### Persistence and variable updates
-
-Object writes flush a complete temporary file before atomically replacing the previous JSON file.
-A failed replacement preserves the previous durable value and does not emit a successful update.
-Node configuration APIs propagate save failures instead of returning an unsaved node ID.
-Variable report/command templates are read from current storage on each lookup, so creating,
-updating, or deleting a variable no longer requires an orchestrator restart.
-
-## API Endpoints
-
-Controllers are routed under `api/[controller]`.
+Controllers are routed as `api/[controller]` and currently have no authentication. CORS allows any origin, method, and header.
 
 ### `api/Nodes`
-- `GET api/Nodes` � list configured nodes and their status.
 
-### `api/Variable`
-- `GET api/Variable/templates` � list variable templates.
+- `GET api/Nodes` - configured nodes with online status and device status.
+- `GET api/Nodes/online` - currently online nodes.
+- `GET api/Nodes/{id}/configuration` - stored node configuration; `?state=true` overlays current command state.
+- `POST api/Nodes/configuration` - save a node configuration JSON document.
+- `GET api/Nodes/{id}/delete` - delete stored node configuration.
+- `GET api/Nodes/{id}/devices/status` - ask an online node for device status.
+- `GET api/Nodes/{id}/device/templates` - ask an online node for device configuration templates.
+- `POST api/Nodes/checkplugin` - validate plugin URL reachability and return content metadata.
+- `POST api/Nodes/validatecron` - validate and summarize a Quartz cron expression.
+- `GET api/Nodes/report/{id}/state` - current report state, or online template fallback.
+- `GET api/Nodes/command/{id}/state` - current command state.
+- `POST api/Nodes/report/state` - set report states.
+- `GET api/Nodes/report/templates` - report templates with node/device metadata.
+- `GET api/Nodes/command/templates` - command templates with node/device metadata.
+- `GET api/Nodes/variable/templates` - variable templates in the legacy nodes shape used by the UI.
+- `GET api/Nodes/variables` - stored variables.
+- `POST api/Nodes/variable/save` - create/update a variable.
+- `GET api/Nodes/variable/{id}/delete` - delete a variable.
 
-### `api/Report`
-- `GET api/Report/{id}/value` � current or default value of a report/variable/command.
+### `api/Report`, `api/Command`, `api/Variable`
 
-### `api/Command`
-- Command APIs (send/read command values).
+- `GET api/Report/{id}/value` - current report or template default.
+- `GET api/Report/templates` - report templates.
+- `GET api/Command/{id}/value` - current command or template default.
+- `GET api/Command/templates` - command templates.
+- `POST api/Command/execute` - publish a command to the node owning the command id.
+- `GET api/Variable/templates` - variable templates.
+- `GET api/Variable/{id}/value` - variable DTO.
 
 ### `api/Dashboard`
-- `GET api/Dashboard/configuration` � dashboard configuration (optional `?history=true`).
+
+- `GET api/Dashboard/configuration` - dashboard configuration; `?history=true` includes report history in elements.
+- `POST api/Dashboard/configuration` - save dashboard configuration.
+- `GET api/Dashboard/reports` - current report states.
+- `GET api/Dashboard/report/{id}/history` - report history, or current value if no history is maintained.
+- `GET api/Dashboard/reports/history/reset` - clear report state/history.
 
 ### `api/Matter`
-- `GET api/Matter/status` - bridge state: running, onboarding codes, commissioned fabrics, bridged endpoints.
-- `GET api/Matter/configuration` / `POST api/Matter/configuration` - read/save the bridge configuration.
-- `GET api/Matter/qr` - the onboarding payload rendered as a PNG QR code.
-- `GET api/Matter/commissioning/open` - re-open the pairing window.
-- `GET api/Matter/devices/refresh` - reconcile bridged endpoints with the current node configuration.
 
-Node configuration creation, changes, and deletion also trigger reconciliation automatically.
-Unchanged endpoints remain attached; changed declarations reuse their persisted endpoint IDs.
-Node online/offline MQTT announcements update live endpoint reachability. The orchestrator republishes
-nonempty retained presence after each broker connection, allowing nodes to rediscover it after reconnect.
-- `GET api/Matter/reset` - decommission: drop every fabric and generate a new pairing code.
+- `GET api/Matter/status` - bridge running/error state, onboarding codes, commissioned fabrics, and endpoints.
+- `GET api/Matter/configuration` - bridge configuration.
+- `POST api/Matter/configuration` - save bridge configuration and restart the bridge if needed.
+- `GET api/Matter/qr` - onboarding QR as PNG.
+- `GET api/Matter/commissioning/open` - reopen commissioning window.
+- `GET api/Matter/devices/refresh` - reconcile endpoints from stored node configuration.
+- `GET api/Matter/reset` - delete commissioned fabrics/provisioning state and generate a new pairing identity.
+
+### Health
+
+- `GET /health` - ASP.NET Core health check endpoint. It reports unhealthy when the MQTT client is disconnected and healthy when the broker connection is active. The endpoint is anonymous and intended for Docker/Kubernetes health checks.
 
 ## MQTT
 
-All device communication flows through an MQTT broker. The orchestrator's MQTT logic lives in `Services/OrchestratorMqttService.cs`. Topics are built with `Constants.Get(id, MqttTopic.<Kind>)` from `RIoT2.Core`; payloads are JSON-serialized models from `RIoT2.Core.Models`.
+Topics are built with `RIoT2.Core.Constants.Get(id, MqttTopic.<Kind>)`.
 
-### Subscriptions (Node ? Orchestrator)
+### Subscriptions
 
-On `Start()` the orchestrator subscribes to wildcard topics for all nodes:
+| Purpose | Subscription | Payload | Handling |
+|---|---|---|---|
+| Reports | `riot2/node/+/report` (`Constants.Get("+", MqttTopic.Report)`) | `Report` | Ignore unknown ids; store state/history; mirror to Matter; enqueue Elsa gRPC delivery. |
+| Node presence | `riot2/node/+/online` (`Constants.Get("+", MqttTopic.NodeOnline)`) | `NodeOnlineMessage` | Add/remove online node; update Matter reachability; send configuration command on online. |
 
-| Purpose | Topic key | Subscription | Payload | Handling |
-|---|---|---|---|---|
-| Device reports | `MqttTopic.Report` | `Constants.Get("+", MqttTopic.Report)` | `Report` | Stored via `IMessageStateService`, mirrored to Matter, then forwarded to the online Elsa 3 workflow node. Reports without a matching template are ignored. |
-| Node online/offline | `MqttTopic.NodeOnline` | `Constants.Get("+", MqttTopic.NodeOnline)` | `NodeOnlineMessage` | Node added to / removed from `IOnlineNodeService`; a configuration command is sent when a node comes online. |
-
-### Publications (Orchestrator ? Node)
+### Publications
 
 | Purpose | Topic | Payload | Trigger |
 |---|---|---|---|
-| Orchestrator online | `Constants.Get("", MqttTopic.OrchestratorOnline)` | `{"isOnline":true}` (**retained**) | Sent after every broker connection so nodes discover the orchestrator on (re)connect. |
-| Configuration command | `Constants.Get(nodeId, MqttTopic.Configuration)` | `ConfigurationCommand` (`ApiBaseUrl`) | Node comes online, or a `NodeDeviceConfiguration` is updated. |
-| Device command | `Constants.Get(nodeId, MqttTopic.Command)` | `Command` (`Id`, `Value`) | Requested by Elsa, the dashboard, or Matter; node id resolved via `FindNodeId`. |
-| Orchestrator report | `Constants.Get(OrchestratorConfiguration.Id, MqttTopic.Report)` | `Report` | Published when a `Variable` changes. |
+| Orchestrator online | `riot2/orchestrator/online` | `{"isOnline":true}` retained | Broker connection/reconnection. |
+| Node configuration | `riot2/node/{nodeId}/configuration` | `ConfigurationCommand` with `ApiBaseUrl` | Node comes online or node configuration changes. |
+| Device command | `riot2/node/{nodeId}/command` | `Command` | `api/Command/execute`, Elsa, dashboard, or Matter. |
+| Orchestrator variable report | `riot2/node/{orchestratorId}/report` | `Report` | Variable create/update. |
 
-> Variable updates use the variable APIs, which may trigger report publication. Commands are serialized with `Json.SerializeIgnoreNulls(...)`.
+`OrchestratorMqttService` uses a bounded MQTT work queue and a separate bounded workflow-delivery queue (1000 items each). Workflow gRPC calls use one reusable `WorkflowTriggerClient` channel, a five-second deadline, and no automatic retry.
 
-Workflow delivery owns one reusable gRPC channel, replacing it when the advertised destination
-changes and disposing it on shutdown. Transport ownership is isolated in `WorkflowTriggerClient`;
-the MQTT service still owns routing and its bounded workflow queue. The five-second deadline,
-no-automatic-retry policy, and explicit overflow/shutdown logs are unchanged.
+## gRPC workflow contract
+
+`Protos\riot_trigger.proto` matches the Elsa server proto:
+
+- package `riot`
+- service `RIoTTriggerService`
+- rpc `Trigger(TriggerRequest) returns (TriggerResponse)`
+- `TriggerRequest`: `id` (report id), `data` (JSON report payload)
+- `TriggerResponse`: `success`
+
+Workflow nodes advertise `GrpcBaseUrl`; if absent, the orchestrator falls back to `NodeBaseUrl`.
 
 ## Matter Control Bridge
 
-### Upgrading persisted Matter fabrics
+The bridge is disabled by default. Enable it through the UI or by posting `{ "enabled": true }` to `api/Matter/configuration`.
 
-Matter `0.1.13` persists the current ACL alongside fabric credentials. Legacy snapshots without
-ACL state are rejected rather than silently restoring the original commissioner's administrator
-access. Back up the existing Matter credentials/state before upgrading. An affected bridge must
-be reset and recommissioned using the existing Matter Reset action; do not treat a failed restore
-as a successful fresh startup. Reset removes the old commissioned identity and pairing state.
+Important settings:
 
-The orchestrator can present itself to a Matter ecosystem (Google Home, Apple Home, Alexa) as a single
-**Control Bridge**, with every Matter-capable RIoT device exposed as a bridged endpoint under its
-aggregator. It is off by default; enable it in the RIoT UI's *Matter* view or by posting
-`{ "enabled": true }` to `api/Matter/configuration`.
+- `VendorId` / `ProductId`: Matter identity; defaults are CSA test VID `0xFFF1` and PID `0x8000`.
+- `Discriminator`: 12-bit setup discriminator.
+- `AttestationPath`: optional operator-supplied DAC/PAI/CD/key directory.
+- `CredentialsDirectory`: relative content-root directory for generated TEST credentials and `fabrics.json`.
+- `FabricStoreKey`: generated once; changing it loses commissioned fabrics.
 
-### How a device becomes a Matter endpoint
+Matter commissioning needs IPv6, UDP 5540 and UDP 5353, and usually host networking in Docker because mDNS and link-local IPv6 do not work through bridge networking.
 
-A node plugin implements `RIoT2.Core.Interfaces.IMatterDevice` and returns one or more
-`MatterEndpointTemplate` descriptors for the configuration it was given. The node surfaces them on
-`GET /api/device/configuration/templates`, and they travel to the orchestrator as
-`DeviceConfiguration.MatterEndpoints` through the normal template import / node configuration save.
-`MatterBridgeService` walks the stored node configurations and adds one bridged endpoint per declared
-template. See `RIoT2.Net.Devices/Catalog/Hue.cs` for the reference implementation.
+## Running locally
 
-The two directions are:
+1. Set the environment variables in `Properties\launchSettings.json` or your shell.
+2. Start the `RIoT2.Net.Orchestrator` launch profile or run:
 
-- **Google Home -> RIoT:** a cluster attribute is written by a Matter Invoke, the adapter resolves the
-  matching `MatterCommandBinding` and calls `IOrchestratorMqttService.ExecuteCommand`, which publishes
-  the usual device `Command`.
-- **RIoT -> Google Home:** `OrchestratorMqttService` mirrors every accepted `Report` into the bridge,
-  the adapter writes the scaled value onto the cluster attribute, and the Matter stack turns that into
-  a subscription report.
+```powershell
+dotnet run --project .\RIoT2.Net.Orchestrator.csproj
+```
 
-### Configuration
+## Upgrading / breaking changes
 
-`MatterConfiguration` (persisted through `IObjectStore`, editable from the UI):
-
-| Setting | Meaning |
-|---|---|
-| `Enabled` | Whether the bridge starts with the orchestrator. |
-| `NodeLabel` | The name a commissioner shows for the bridge itself. |
-| `VendorId` / `ProductId` | The Matter identity, encoded into the onboarding codes. Defaults are the CSA test VID `0xFFF1` and PID `0x8000`. |
-| `Discriminator` | The 12-bit setup discriminator advertised over DNS-SD. |
-| `AttestationPath` | A directory holding operator-supplied `dac.der`, `pai.der`, `cd.der` and `dac-key.pem`. Empty means TEST credentials are generated for the configured VID/PID. |
-| `CredentialsDirectory` | Where generated credentials and the persisted fabric table are written (relative to the content root when not rooted). |
-| `FabricStoreKey` | The passphrase sealing the persisted fabric table. Generated once; changing it loses every commissioned fabric. |
-
-The setup passcode, PBKDF salt and the endpoint id map are held separately in `MatterBridgeState`, so
-saving configuration from the UI never invalidates a printed QR code and never re-numbers endpoints a
-controller has already learned.
-
-### Prerequisites
-
-- **Google Home requires a Developer Console project.** Google Home only commissions an uncertified
-  Matter device whose Vendor ID / Product ID are registered as an integration in the
-  [Google Home Developer Console](https://console.home.google.com/). Register the configured VID/PID
-  pair (by default the test VID `0xFFF1`) before pairing, or commissioning will fail.
-- **Network.** IPv6 is mandatory. UDP 5540 (operational) and UDP 5353 (mDNS) must be reachable, and the
-  commissioner must be on the same L2 segment. In Docker the orchestrator must run with
-  `network_mode: host` - bridge networking breaks mDNS and IPv6 link-local discovery.
-- **Packaging.** `RIoT2.Matter` and `RIoT2.Matter.ControlBridge` must be published to the private GitHub
-  NuGet feed and referenced as packages before a container build; the Dockerfile restores from that feed
-  and cannot see a `ProjectReference`.
-
-### Known gaps
-
-Inherited from `RIoT2.Matter` and not closed by the bridge: no BLE/BTP transport (on-network
-commissioning only, so the commissioner must already be on the same network), no group-cast security
-path, and no Wi-Fi/Thread network commissioning.
-
-## Debugging / running locally
-
-1. Update environment parameters in `Properties/launchSettings.json` for the `RIoT2.Net.Orchestrator` profile.
-2. Start the `RIoT2.Net.Orchestrator` profile in debugging mode.
+- Required env vars no longer have Dockerfile defaults. Set `RIOT2_ORCHESTRATOR_ID`, `RIOT2_ORCHESTRATOR_URL`, and `RIOT2_MQTT_IP` explicitly or the app exits during startup.
+- The container now listens on `8080`, not `80`. Either map `-p 80:8080` or override `ASPNETCORE_HTTP_PORTS`.
+- `RIOT2_ORCHESTRATOR_URL` examples should include the externally reachable port, for example `http://<host>:8080` when nodes reach the container on 8080.
+- The runtime process runs as the non-root .NET app user (`APP_UID`, currently UID `1654`). Bind-mounted `StoredObjects`, `Logs`, and `MatterCredentials` directories must be writable by that UID, for example `sudo chown -R 1654:1654 <dir>`.
+- With `--network host`, a non-root process cannot bind privileged ports below 1024. Keep port `8080` or grant/broker capabilities intentionally.
 
 ## Docker
 
-A `Dockerfile` is provided (based on `mcr.microsoft.com/dotnet/aspnet:9.0-alpine`). Building requires build args to restore from the private GitHub NuGet feed:
+The Dockerfile uses multi-stage .NET 9 images. The runtime stage runs as the non-root .NET `app` user and listens on port `8080`.
 
-docker build \
-  --build-arg NUGET_AUTH_TOKEN=<your-token> \
-  --build-arg NUGET_URL=https://nuget.pkg.github.com/Revolutionized-IoT2/index.json \
+Build with a private-feed token:
+
+```powershell
+docker build `
+  --build-arg NUGET_AUTH_TOKEN=<your-token> `
+  --build-arg NUGET_URL=https://nuget.pkg.github.com/Revolutionized-IoT2/index.json `
   -t riot2-orchestrator .
+```
 
-The container listens on port `80` (`ASPNETCORE_HTTP_PORTS=80`).
+Run with explicit configuration; no MQTT or orchestrator secrets are baked into the image:
 
-This revised README maintains the original structure while enhancing clarity and coherence, ensuring that all relevant information is presented in a logical flow.
+```powershell
+docker run --rm -p 8080:8080 `
+  -e RIOT2_ORCHESTRATOR_ID=<guid-or-node-id> `
+  -e RIOT2_ORCHESTRATOR_URL=http://<host>:8080 `
+  -e RIOT2_MQTT_IP=<broker-host> `
+  -e RIOT2_MQTT_USERNAME=<user> `
+  -e RIOT2_MQTT_PASSWORD=<password> `
+  riot2-orchestrator
+```
+
+For Matter, prefer host networking on Linux and mount persistent volumes for `StoredObjects`, `Logs`, and `MatterCredentials`.
+
+Use `/health` as a health-check endpoint, for example Docker `HEALTHCHECK CMD wget -qO- http://127.0.0.1:8080/health || exit 1`.

@@ -128,6 +128,10 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         {
             ArgumentNullException.ThrowIfNull(configuration);
 
+            // Validate before persisting: this value controls where the bridge writes generated
+            // credentials and deletes its fabric store during reset.
+            ResolveCredentialsDirectory(configuration.CredentialsDirectory);
+
             await _gate.WaitAsync(cancellationToken);
             try
             {
@@ -189,7 +193,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
                 // Drop both halves of the identity: the fabrics a controller commissioned, and the
                 // provisioning bundle behind the onboarding codes. The endpoint map goes with them, since
                 // a fresh pairing has no device references to keep stable.
-                var fabricFile = Path.Combine(ResolveCredentialsDirectory(), FabricFileName);
+                var fabricFile = Path.Combine(ResolveCredentialsDirectory(_configuration.CredentialsDirectory), FabricFileName);
                 if (File.Exists(fabricFile))
                 {
                     File.Delete(fabricFile);
@@ -327,7 +331,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
 
             try
             {
-                var credentialsDirectory = ResolveCredentialsDirectory();
+                var credentialsDirectory = ResolveCredentialsDirectory(_configuration.CredentialsDirectory);
                 Directory.CreateDirectory(credentialsDirectory);
 
                 // Generated once and then left alone: it seals the persisted fabric table, so replacing it
@@ -612,13 +616,28 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
             return provisioning;
         }
 
-        private string ResolveCredentialsDirectory()
+        private string ResolveCredentialsDirectory(string configuredDirectory)
         {
-            var directory = string.IsNullOrWhiteSpace(_configuration.CredentialsDirectory)
+            var directory = string.IsNullOrWhiteSpace(configuredDirectory)
                 ? "MatterCredentials"
-                : _configuration.CredentialsDirectory;
+                : configuredDirectory;
 
-            return Path.IsPathRooted(directory) ? directory : Path.Combine(_environment.ContentRootPath, directory);
+            if (Path.IsPathRooted(directory))
+                throw new ArgumentException("Matter credentials directory must be relative to the orchestrator content root.", nameof(configuredDirectory));
+
+            var contentRoot = Path.GetFullPath(_environment.ContentRootPath);
+            var fullPath = Path.GetFullPath(Path.Combine(contentRoot, directory));
+            var normalizedRoot = contentRoot.EndsWith(Path.DirectorySeparatorChar)
+                ? contentRoot
+                : contentRoot + Path.DirectorySeparatorChar;
+
+            if (!fullPath.Equals(contentRoot, StringComparison.OrdinalIgnoreCase) &&
+                !fullPath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException("Matter credentials directory must stay under the orchestrator content root.", nameof(configuredDirectory));
+            }
+
+            return fullPath;
         }
 
         private static string EndpointKey(string deviceId, string templateId) => $"{deviceId}:{templateId}";

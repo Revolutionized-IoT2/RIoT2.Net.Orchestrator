@@ -44,6 +44,10 @@ namespace RIoT2.Net.Orchestrator.Controllers
                 await _bridge.SaveConfigurationAsync(configuration);
                 return new OkObjectResult(_bridge.GetStatus());
             }
+            catch (ArgumentException x)
+            {
+                return BadRequest(x.Message);
+            }
             catch (Exception x)
             {
                 return StatusCode(500, x.Message);

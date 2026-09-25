@@ -58,7 +58,9 @@ builder.Services.AddSingleton<IOrchestratorConfigurationService, OrchestratorCon
 builder.Services.AddSingleton<IOnlineNodeService, OnlineNodeService>();
 builder.Services.AddSingleton<IStoredObjectService, StoredObjectService>();
 builder.Services.AddSingleton<IMessageStateService, MessageStateService>();
-builder.Services.AddSingleton<IOrchestratorMqttService, OrchestratorMqttService>();
+builder.Services.AddSingleton<OrchestratorMqttService>();
+builder.Services.AddSingleton<IOrchestratorMqttService>(s => s.GetRequiredService<OrchestratorMqttService>());
+builder.Services.AddHealthChecks().AddCheck<MqttHealthCheck>("mqtt");
 
 // Matter Control Bridge. One instance serves both interfaces: the bridge the UI drives, and the
 // report sink OrchestratorMqttService pushes device reports into.
@@ -85,7 +87,9 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-orchestratorLogger.LogInformation($"Services initialized. {app.Services.GetService<IOrchestratorConfigurationService>().OrchestratorConfiguration.Manifest?.Name} - {app.Services.GetService<IOrchestratorConfigurationService>().OrchestratorConfiguration.Manifest?.Version}");
+var orchestratorConfiguration = app.Services.GetRequiredService<IOrchestratorConfigurationService>().OrchestratorConfiguration;
+OrchestratorConfigurationService.ValidateConfiguration(orchestratorConfiguration, orchestratorLogger);
+orchestratorLogger.LogInformation($"Services initialized. {orchestratorConfiguration.Manifest?.Name} - {orchestratorConfiguration.Manifest?.Version}");
 
 IHostApplicationLifetime lifetime = app.Lifetime;
 lifetime.ApplicationStarted.Register(() =>
@@ -102,6 +106,7 @@ app.UseAuthorization();
 
 app.UseCors();
 
+app.MapHealthChecks("/health").AllowAnonymous();
 app.MapControllers();
 
 app.Run();
