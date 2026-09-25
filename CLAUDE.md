@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (and other AI coding agents) when wor
 - **Restore & build:** `dotnet build`
 - **Run locally:** `dotnet run` (or start the `RIoT2.Net.Orchestrator` profile in Visual Studio via debugging mode).
 - **Configuration:** Update environment parameters in `Properties/launchSettings.json` for the `RIoT2.Net.Orchestrator` profile before running.
-- **Docker:** A `Dockerfile` is provided (based on `mcr.microsoft.com/dotnet/aspnet:9.0-alpine`). It requires build args `NUGET_AUTH_TOKEN` and `NUGET_URL` to restore packages from the private GitHub NuGet feed (`https://nuget.pkg.github.com/Revolutionized-IoT2/index.json`).
+- **Docker:** A `Dockerfile` is provided (based on `mcr.microsoft.com/dotnet/aspnet:9.0-alpine`). It requires build args `NUGET_AUTH_TOKEN` and `NUGET_URL` to restore packages from the private GitHub NuGet feed (`https://nuget.pkg.github.com/Revolutionized-IoT2/index.json`). The runtime stage runs as the non-root .NET app user and listens on HTTP port `8080`.
 
 ## Architecture
 
@@ -66,6 +66,9 @@ All profiles enable `WriteIndented` and register `JObjectConverter`. The `AddJso
 
 - CORS is configured with a permissive default policy (`AllowAnyOrigin/Method/Header`).
 - HTTPS redirection is currently disabled in the request pipeline.
+- No authentication/authorization scheme is registered; controllers are currently anonymous even though `UseAuthorization()` is in the pipeline.
+- Runtime JSON storage lives under `StoredObjects`. `FileObjectStore` rejects path separators/traversal in logical type names and object ids.
+- Matter credentials must stay under a content-root-relative `CredentialsDirectory` (default `MatterCredentials`); absolute or escaping paths are rejected.
 
 ## MQTT Message Transfers (Orchestrator ↔ Nodes)
 
@@ -79,8 +82,8 @@ On `Start()`, the orchestrator subscribes to two wildcard topics to receive mess
 
 | Purpose | Topic key | Payload model | Handling |
 |---|---|---|---|---|
-| Device reports | riot2/+/report | `Report` | Matched via `Report.Create(...)`. Ignored if no matching report template. State stored via `IMessageStateService.SetState`, then routed to the external workflow engine |
-| Node online/offline | riot2/+/online | `NodeOnlineMessage` | Node id extracted via `Constants.GetTopicId(topic, MqttTopic.NodeOnline)`. If `IsOnline`, node is added to `IOnlineNodeService` and a configuration command is sent back; otherwise the node is removed. |
+| Device reports | riot2/node/+/report | `Report` | Matched via `Report.Create(...)`. Ignored if no matching report template. State stored via `IMessageStateService.SetState`, mirrored to Matter, then routed to the Elsa workflow node over gRPC. |
+| Node online/offline | riot2/node/+/online | `NodeOnlineMessage` | Node id extracted via `Constants.GetTopicId(topic, MqttTopic.NodeOnline)`. If `IsOnline`, node is added to `IOnlineNodeService` and a configuration command is sent back; otherwise the node is removed. |
 
 Incoming topics are disambiguated with `MqttClient.IsMatch(topic, subscription)`.
 
@@ -88,10 +91,10 @@ Incoming topics are disambiguated with `MqttClient.IsMatch(topic, subscription)`
 
 | Purpose | Topic | Payload model | Trigger |
 |---|---|---|---|
-| Orchestrator online announcement | riot2/orchestrator/online | none (empty, **retained**) | Sent on `Start()` so nodes can discover the orchestrator on (re)connect. |
-| Configuration command | riot2/{nodeId}/configuration | `ConfigurationCommand` (contains `ApiBaseUrl`) | Sent when a node comes online, and when a `NodeDeviceConfiguration` is updated. |
-| Device command | riot2/{nodeId}/command | `Command` (`Id`, `Value`) | Requested by Elsa, the dashboard, or Matter; node id resolved via `IOrchestratorConfigurationService.FindNodeId`. Command state is recorded via `IMessageStateService.SetState` after publishing. |
-| Orchestrator report | riot2/{orchestratorId}/report | `Report` | Published when a `Variable` changes (via `Variable.CreateReport()`), so the orchestrator's own variables are visible as reports. |
+| Orchestrator online announcement | riot2/orchestrator/online | `{"isOnline":true}` (**retained**) | Sent on broker connection/reconnection so nodes can discover the orchestrator. |
+| Configuration command | riot2/node/{nodeId}/configuration | `ConfigurationCommand` (contains `ApiBaseUrl`) | Sent when a node comes online, and when a `NodeDeviceConfiguration` is updated. |
+| Device command | riot2/node/{nodeId}/command | `Command` (`Id`, `Value`) | Requested by Elsa, the dashboard, or Matter; node id resolved via `IOrchestratorConfigurationService.FindNodeId`. Command state is recorded via `IMessageStateService.SetState` after publishing. |
+| Orchestrator report | riot2/node/{orchestratorId}/report | `Report` | Published when a `Variable` changes (via `Variable.CreateReport()`), so the orchestrator's own variables are visible as reports. |
 
 ### Message Content Notes
 

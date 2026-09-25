@@ -58,8 +58,9 @@ namespace RIoT2.Net.Orchestrator.Services
         public string Save<T>(T obj, bool persistent = true, bool autoTypeNameHandling = false, bool includeNulls = false)
         {
             ArgumentNullException.ThrowIfNull(obj);
-            OperationType op;
+            OperationType op = OperationType.NoChange;
             string id;
+            var hasNoChange = false;
 
             lock (_sync)
             {
@@ -85,27 +86,29 @@ namespace RIoT2.Net.Orchestrator.Services
                     if (currentJson == json)
                     {
                         _logger.LogInformation("No change in existing object. Object not Saved.");
-                        StoredObjectEvent?.Invoke(typeof(T), obj, OperationType.NoChange);
-                        return id;
+                        hasNoChange = true;
                     }
                 }
 
-                if (persistent)
+                if (!hasNoChange)
                 {
-                    try
+                    if (persistent)
                     {
-                        _store.Write(t, id, json);
+                        try
+                        {
+                            _store.Write(t, id, json);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Could not save {Type} with id {Id}", t, id);
+                            return null;
+                        }
                     }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Could not save {Type} with id {Id}", t, id);
-                        return null;
-                    }
-                }
 
-                op = currentObject == null ? OperationType.Created : OperationType.Updated;
-                objs.RemoveAll(x => x.Id == id);
-                objs.Add(obj);
+                    op = currentObject == null ? OperationType.Created : OperationType.Updated;
+                    objs.RemoveAll(x => x.Id == id);
+                    objs.Add(obj);
+                }
             }
 
             StoredObjectEvent?.Invoke(typeof(T), obj, op);

@@ -99,6 +99,37 @@ namespace RIoT2.Net.Orchestrator.Services
             };
         }
 
+        public static void ValidateConfiguration(OrchestratorConfiguration configuration, ILogger logger = null)
+        {
+            ArgumentNullException.ThrowIfNull(configuration);
+
+            var missing = new List<string>();
+            if (string.IsNullOrWhiteSpace(configuration.Id))
+                missing.Add("RIOT2_ORCHESTRATOR_ID");
+            if (string.IsNullOrWhiteSpace(configuration.Url))
+                missing.Add("RIOT2_ORCHESTRATOR_URL");
+            if (string.IsNullOrWhiteSpace(configuration.Mqtt?.ServerUrl))
+                missing.Add("RIOT2_MQTT_IP");
+
+            var errors = new List<string>();
+            if (missing.Count > 0)
+                errors.Add($"Missing required environment variables: {string.Join(", ", missing)}");
+
+            if (!string.IsNullOrWhiteSpace(configuration.Url) &&
+                (!Uri.TryCreate(configuration.Url, UriKind.Absolute, out var url) ||
+                 (url.Scheme != Uri.UriSchemeHttp && url.Scheme != Uri.UriSchemeHttps)))
+            {
+                errors.Add("RIOT2_ORCHESTRATOR_URL must be an absolute http or https URL.");
+            }
+
+            if (errors.Count == 0)
+                return;
+
+            var message = "Invalid orchestrator configuration. " + string.Join(" ", errors);
+            logger?.LogCritical("{Message}", message);
+            throw new InvalidOperationException(message);
+        }
+
         private void readNodesConfigurations() 
         {
             try

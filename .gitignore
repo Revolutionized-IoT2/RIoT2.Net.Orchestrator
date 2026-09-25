@@ -17,3 +17,8 @@ bin/Debug/net9.0/RIoT2.Net.Orchestrator.deps.json
 /bin/Debug/net9.0/RIoT2.Net.Orchestrator.dll
 /bin/Debug/net9.0/RIoT2.Net.Orchestrator.exe
 /bin/Debug/net9.0/RIoT2.Net.Orchestrator.pdb
+
+# Build output (all configurations/target frameworks)
+[Bb]in/
+[Oo]bj/
+TestResults/

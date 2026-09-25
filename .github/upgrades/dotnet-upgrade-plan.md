@@ -1,32 +1,22 @@
-# .NET 9.0 Upgrade Plan
+# .NET 9.0 Upgrade Notes
 
-## Execution Steps
+This project has already been upgraded to .NET 9. Use this file as a maintenance checklist for future upgrades.
 
-Execute steps below sequentially one by one in the order they are listed.
+## Current state
 
-1. Validate that an .NET 9.0 SDK required for this upgrade is installed on the machine and if not, help to get it installed.
-2. Ensure that the SDK version specified in global.json files is compatible with the .NET 9.0 upgrade.
-3. Upgrade RIoT2.Net.Orchestrator.csproj
-4. Upgrade Dockerfile to use .NET 9.0 base images.
+- `RIoT2.Net.Orchestrator.csproj` targets `net9.0`.
+- Runtime Docker base image: `mcr.microsoft.com/dotnet/aspnet:9.0-alpine`.
+- Build Docker base image: `mcr.microsoft.com/dotnet/sdk:9.0`.
+- The SDK image is intentionally Debian-based, not Alpine: `Grpc.Tools` uses a glibc-linked `protoc`.
+- The runtime image runs as the non-root .NET app user and listens on HTTP port `8080`.
 
-## Settings
+## Future upgrade checklist
 
-This section contains settings and data used by execution steps.
+1. Validate that the target .NET SDK is installed.
+2. Check any `global.json` for SDK compatibility.
+3. Update `RIoT2.Net.Orchestrator.csproj` target framework and package versions.
+4. Update Docker runtime and SDK base images. Keep a glibc SDK image unless `Grpc.Tools` supports musl.
+5. Confirm Docker still creates writable `StoredObjects`, `Logs`, and `MatterCredentials` folders for the non-root user.
+6. Run `dotnet build .\RIoT2.Net.Orchestrator.csproj`.
 
-### Project upgrade details
-
-This section contains details about each project upgrade and modifications that need to be done in the project.
-
-#### RIoT2.Net.Orchestrator.csproj modifications
-
-Project properties changes:
-  - Target framework should be changed from `net8.0` to `net9.0`
-
-Other changes:
-  - None
-
-#### Dockerfile modifications
-
-Docker base image changes:
-  - Update runtime base image from `mcr.microsoft.com/dotnet/aspnet:8.0-alpine` to `mcr.microsoft.com/dotnet/aspnet:9.0-alpine`.
-  - Update SDK build image from `mcr.microsoft.com/dotnet/sdk:8.0-alpine` to `mcr.microsoft.com/dotnet/sdk:9.0-alpine`.
+Do not add default MQTT credentials or persisted runtime data to the Docker image.

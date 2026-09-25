@@ -174,6 +174,8 @@ namespace RIoT2.Net.Orchestrator.Services
             await _client.Publish(configurationCommandTopic, Json.SerializeIgnoreNulls(generateConfigurationCommand(id)));
         }
 
+        public bool IsConnected => _client?.IsConnected() == true;
+
         private async Task sendOrchestratorOnlineCommand()
         {
             //Retain message so nodes can get orchestrator info on reconnect
