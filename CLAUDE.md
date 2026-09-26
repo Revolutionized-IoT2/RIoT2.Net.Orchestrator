@@ -66,7 +66,7 @@ All profiles enable `WriteIndented` and register `JObjectConverter`. The `AddJso
 
 - CORS is configured with a permissive default policy (`AllowAnyOrigin/Method/Header`).
 - HTTPS redirection is currently disabled in the request pipeline.
-- No authentication/authorization scheme is registered; controllers are currently anonymous even though `UseAuthorization()` is in the pipeline.
+- No authentication/authorization scheme is registered; controllers are anonymous even though `UseAuthorization()` is in the pipeline. This is by design for the isolated single-user deployment. Authentication is planned as an optional security mode, off by default (see `PLATFORM-REVIEW.md` item A1 in the `.github` repository). Don't make auth mandatory. Keep new endpoints compatible with adding policies later, for example by not changing state in `GET` handlers.
 - Runtime JSON storage lives under `StoredObjects`. `FileObjectStore` rejects path separators/traversal in logical type names and object ids.
 - Matter credentials must stay under a content-root-relative `CredentialsDirectory` (default `MatterCredentials`); absolute or escaping paths are rejected.
 
