@@ -51,7 +51,7 @@ Hosted services:
 
 ## REST API
 
-Controllers are routed as `api/[controller]` and currently have no authentication. CORS allows any origin, method, and header.
+Controllers are routed as `api/[controller]` and have no authentication. CORS allows any origin, method, and header. This is intended for an isolated, single-user network. Optional authentication is planned (security mode, off by default); see architecture item A1 in the organization [PLATFORM-REVIEW.md](https://github.com/Revolutionized-IoT2/.github/blob/main/PLATFORM-REVIEW.md).
 
 ### `api/Nodes`
 
