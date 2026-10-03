@@ -97,9 +97,9 @@ today.
   `Json.SerializeIgnoreNulls` for wire payloads that use Core models.
 - Keep `RIoT2.Core`, `RIoT2.Matter` and `RIoT2.Matter.ControlBridge` as package references. The
   Dockerfile restores from GitHub Packages and cannot see project references.
-- Current package pins are `RIoT2.Core` `0.1.45`, `RIoT2.Matter` `0.1.15` and
+- Current package pins are `RIoT2.Core` `1.0.1` (published), `RIoT2.Matter` `0.1.15` and
   `RIoT2.Matter.ControlBridge` `0.1.15`. Use `C:\Src\RIoT2\.localfeed` as an extra NuGet source
-  until those versions are published.
+  until the Matter versions are published.
 - Keep `PackageReference` items versionless; package versions belong in `Directory.Packages.props`.
 - `FileObjectStore` must validate type names and ids as file names. Never build persistence paths
   from raw ids.

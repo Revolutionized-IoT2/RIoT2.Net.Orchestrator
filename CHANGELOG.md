@@ -7,7 +7,7 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 - Changed target framework and Docker runtime image to .NET 10; the build image remains Debian
   `sdk:10.0` for `Grpc.Tools`/`protoc`.
-- Changed package pins to `RIoT2.Core` 0.1.45 and `RIoT2.Matter` /
+- Changed package pins to `RIoT2.Core` 1.0.1 and `RIoT2.Matter` /
   `RIoT2.Matter.ControlBridge` 0.1.15.
 - Updated gRPC dependencies to `Grpc.Net.Client` 2.84.0, `Grpc.Tools` 2.84.0 and
   `Google.Protobuf` 3.36.2 through central package management.

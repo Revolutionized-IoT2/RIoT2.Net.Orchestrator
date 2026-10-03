@@ -142,9 +142,9 @@ next to this one.
 - Release notes are in [CHANGELOG.md](CHANGELOG.md).
 - To release, push a tag `x.y.z`. CI builds and pushes
   `ghcr.io/revolutionized-iot2/riot2-orchestrator:latest` and `:<tag>`.
-- The project references `RIoT2.Core` `0.1.45`, `RIoT2.Matter` `0.1.15` and
-  `RIoT2.Matter.ControlBridge` `0.1.15` as NuGet packages. Until those packages are published,
-  restore with `C:\Src\RIoT2\.localfeed` as an extra source.
+- The project references `RIoT2.Core` `1.0.1`, `RIoT2.Matter` `0.1.15` and
+  `RIoT2.Matter.ControlBridge` `0.1.15` as NuGet packages. Core 1.0.1 is published; until the
+  Matter packages are, restore with `C:\Src\RIoT2\.localfeed` as an extra source.
 
 ## Contributing
 
