@@ -5,7 +5,7 @@ platform. It stores the user's node, dashboard, variable and Matter bridge confi
 online nodes, routes MQTT reports and commands, and forwards accepted reports to Elsa 3 over gRPC.
 
 - Type: ASP.NET Core Web API / hub service
-- Target framework: .NET 9
+- Target framework: .NET 10
 - Root namespace: `RIoT2.Net.Orchestrator`
 - Container image: `ghcr.io/revolutionized-iot2/riot2-orchestrator`
 
@@ -24,7 +24,7 @@ How the orchestrator fits into the platform:
 | `Services/Matter/` | Matter Control Bridge configuration, commissioning and endpoint bridging |
 | `CustomJsonSettings/` | Optional `json-naming-policy` formatter profiles |
 | `Protos/riot_trigger.proto` | gRPC workflow trigger client contract |
-| `Dockerfile` | Multi-stage .NET 9 container image |
+| `Dockerfile` | Multi-stage .NET 10 container image |
 
 ## Runtime configuration
 
@@ -91,9 +91,9 @@ deadline. Delivery is in-memory and not retried automatically; durable delivery 
 
 ## Docker
 
-The Dockerfile uses multi-stage .NET 9 images. The runtime stage is Alpine, runs as the non-root
-.NET app user, and listens on HTTP port `8080`. The Debian SDK stage is intentional because
-`Grpc.Tools` needs glibc-linked `protoc`.
+The Dockerfile uses multi-stage .NET 10 images. The runtime stage is `aspnet:10.0-alpine`, runs as
+the non-root .NET app user, and listens on HTTP port `8080`. The build stage stays on the Debian
+`sdk:10.0` image because `Grpc.Tools` needs glibc-linked `protoc`.
 
 Build from this repository root (`C:\Src\RIoT2\RIoT2.Net.Orchestrator`) with a package-feed token:
 
@@ -130,6 +130,9 @@ dotnet build .\RIoT2.Net.Orchestrator\RIoT2.Net.Orchestrator.csproj
 dotnet test .\RIoT2.Tests\RIoT2.Tests.csproj
 ```
 
+Add `-p:CI=true` to `dotnet build` to reproduce CI analyzer settings locally. Package versions are
+centralized in `Directory.Packages.props`; `PackageReference` items do not carry versions.
+
 [RIoT2.Tests](https://github.com/Revolutionized-IoT2/RIoT2.Tests) references Core, the
 orchestrator and the InfluxDB connector as projects, so those repositories must be checked out
 next to this one.
@@ -139,8 +142,9 @@ next to this one.
 - Release notes are in [CHANGELOG.md](CHANGELOG.md).
 - To release, push a tag `x.y.z`. CI builds and pushes
   `ghcr.io/revolutionized-iot2/riot2-orchestrator:latest` and `:<tag>`.
-- The project currently references `RIoT2.Core` `0.1.41`, `RIoT2.Matter` `0.1.14` and
-  `RIoT2.Matter.ControlBridge` `0.1.14` as NuGet packages.
+- The project references `RIoT2.Core` `0.1.45`, `RIoT2.Matter` `0.1.15` and
+  `RIoT2.Matter.ControlBridge` `0.1.15` as NuGet packages. Until those packages are published,
+  restore with `C:\Src\RIoT2\.localfeed` as an extra source.
 
 ## Contributing
 

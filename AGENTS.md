@@ -8,7 +8,7 @@ workspace map, platform-wide rules and the documentation rules. In the local wor
 
 ## What this is
 
-An ASP.NET Core service targeting .NET 9. It is the hub of the RIoT2 platform: it stores node,
+An ASP.NET Core service targeting .NET 10. It is the hub of the RIoT2 platform: it stores node,
 dashboard, variable and Matter bridge configuration, tracks online nodes, routes MQTT reports and
 commands, and forwards accepted reports to Elsa 3 over gRPC. It publishes the Docker image
 `ghcr.io/revolutionized-iot2/riot2-orchestrator`.
@@ -56,7 +56,7 @@ pushes `ghcr.io/revolutionized-iot2/riot2-orchestrator:latest` and `:<tag>`.
 | `Services/Matter/` | Matter Control Bridge configuration, endpoint composition, commissioning and report/command bridging |
 | `Services/WorkflowTriggerClient.cs` | Reused gRPC client/channel with a five-second workflow trigger deadline |
 | `Protos/riot_trigger.proto` | gRPC trigger contract, kept in lockstep with Elsa's `riot.proto` |
-| `Dockerfile` | .NET 9 multi-stage image; runtime is Alpine, non-root, HTTP port 8080 |
+| `Dockerfile` | .NET 10 multi-stage image; runtime is Alpine, non-root, HTTP port 8080 |
 | `.github/workflows/docker-image.yml` | Tag-triggered GHCR image publish workflow |
 
 ## Contracts implemented here
@@ -97,9 +97,10 @@ today.
   `Json.SerializeIgnoreNulls` for wire payloads that use Core models.
 - Keep `RIoT2.Core`, `RIoT2.Matter` and `RIoT2.Matter.ControlBridge` as package references. The
   Dockerfile restores from GitHub Packages and cannot see project references.
-- The current Core pin is `RIoT2.Core` `0.1.41`; that version has no git tag in `RIoT2.Core`.
-  Check [MA2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/README.md#ma2-cut-a-core-release-and-align-all-consumers)
-  before assuming a clean restore can get that package.
+- Current package pins are `RIoT2.Core` `0.1.45`, `RIoT2.Matter` `0.1.15` and
+  `RIoT2.Matter.ControlBridge` `0.1.15`. Use `C:\Src\RIoT2\.localfeed` as an extra NuGet source
+  until those versions are published.
+- Keep `PackageReference` items versionless; package versions belong in `Directory.Packages.props`.
 - `FileObjectStore` must validate type names and ids as file names. Never build persistence paths
   from raw ids.
 - Matter generated credentials and the fabric store must stay under a content-root-relative
@@ -155,7 +156,8 @@ today.
   [M3](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/plans/m03-split-oversized-classes.md),
   [M4](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/plans/m04-typed-configuration.md),
   [M7](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/plans/m07-contract-integration-tests.md) and
-  [M8](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/plans/m08-dotnet10-migration.md).
+  [M8](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/plans/m08-dotnet10-migration.md)
+  (target-framework migration completed; nullable and threading-analyzer practice steps remain open).
 - Designs
   [7.1](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/reliable-delivery.md),
   [7.2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/desired-state-configuration.md) and
