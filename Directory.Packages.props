@@ -10,8 +10,8 @@
     <PackageVersion Include="Grpc.Tools" Version="2.84.0" />
     <PackageVersion Include="QRCoder" Version="1.6.0" />
     <PackageVersion Include="RIoT2.Core" Version="1.0.1" />
-    <PackageVersion Include="RIoT2.Matter" Version="0.1.15" />
-    <PackageVersion Include="RIoT2.Matter.ControlBridge" Version="0.1.15" />
+    <PackageVersion Include="RIoT2.Matter" Version="1.0.0" />
+    <PackageVersion Include="RIoT2.Matter.ControlBridge" Version="1.0.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
   </ItemGroup>
