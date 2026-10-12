@@ -31,6 +31,13 @@
        packages before the container build: the Dockerfile restores from that feed and cannot see a
        ProjectReference. -->
 
+  <!-- Local runtime state is gitignored and must never reach publish output or an image
+       (backlog item 20): StoredObjects holds node configurations with device credentials. -->
+  <ItemGroup>
+    <Content Remove="StoredObjects\**;MatterCredentials\**;Logs\**;Data\**" />
+    <None Remove="StoredObjects\**;MatterCredentials\**;Logs\**;Data\**" />
+  </ItemGroup>
+
   <ItemGroup>
     <Protobuf Include="Protos\riot_trigger.proto" GrpcServices="Client" />
     <InternalsVisibleTo Include="RIoT2.Tests" />

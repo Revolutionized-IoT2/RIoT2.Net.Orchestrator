@@ -11,6 +11,9 @@ then builds and pushes the Docker image to GitHub Container Registry.
   `RIoT2.Matter.ControlBridge` 0.1.15.
 - Updated gRPC dependencies to `Grpc.Net.Client` 2.84.0, `Grpc.Tools` 2.84.0 and
   `Google.Protobuf` 3.36.2 through central package management.
+- Fixed (backlog item 20): `dotnet publish` from a developer checkout no longer copies
+  `StoredObjects/` (node configurations with device credentials), `MatterCredentials/`, `Logs/` or
+  `Data/` into the output, and `.dockerignore` also excludes `Data`.
 - Documentation: `AGENTS.md` is the AI instruction file, `CLAUDE.md` imports it, and repository
   guidance moved from the README and old instruction files into the standard layout.
 

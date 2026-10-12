@@ -116,9 +116,11 @@ today.
 
 ## Pitfalls
 
-- The Web SDK includes `**/*.json` as content, so `dotnet publish` from a developer checkout can
-  copy local `StoredObjects/` into the publish output. This is backlog item
-  [20](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md).
+- The Web SDK includes `**/*.json` as content. The `.csproj` therefore excludes `StoredObjects/`,
+  `MatterCredentials/`, `Logs/` and `Data/` from publish, and `.dockerignore` excludes them from
+  the Docker context (backlog item
+  [20](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md),
+  fixed 2026-10-12). Add any new runtime folder to both.
 - `Properties/launchSettings.json`, `StoredObjects/`, `Logs/` and `MatterCredentials/` can contain
   local values or secrets. Do not copy their contents into docs, images or examples.
 - Workflow delivery is volatile: reports are dropped if no workflow node is online, if the gRPC
