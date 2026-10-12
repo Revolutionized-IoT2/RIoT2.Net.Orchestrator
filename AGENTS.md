@@ -37,11 +37,15 @@ dotnet run --project .\RIoT2.Net.Orchestrator\RIoT2.Net.Orchestrator.csproj
 Build the container from this repository root (`C:\Src\RIoT2\RIoT2.Net.Orchestrator`):
 
 ```powershell
-docker build --build-arg NUGET_AUTH_TOKEN=<github-package-token> --build-arg NUGET_URL=https://nuget.pkg.github.com/Revolutionized-IoT2/index.json -t riot2-orchestrator .
+$env:NUGET_AUTH_TOKEN = '<github-package-token>'   # a BuildKit secret, never a build argument
+docker build --secret id=nuget_token,env=NUGET_AUTH_TOKEN -t riot2-orchestrator .
 ```
 
-To release, push a clean git tag `x.y.z`. CI (`.github/workflows/docker-image.yml`) builds and
-pushes `ghcr.io/revolutionized-iot2/riot2-orchestrator:latest` and `:<tag>`.
+Every push runs `.github/workflows/ci.yml` (build, image build, secret scan). To release, push a
+clean git tag `x.y.z`: `release.yml` validates, then pushes
+`ghcr.io/revolutionized-iot2/riot2-orchestrator:latest` and `:<tag>` ([CI guide](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/guides/ci.md)). The
+Dockerfile writes `Data/Manifest.json` from the `VERSION` and `IMAGE_TAG` build arguments.
+The cross-repository tests in RIoT2.Tests build this repository's `main` nightly.
 
 ## Layout
 
@@ -49,7 +53,7 @@ pushes `ghcr.io/revolutionized-iot2/riot2-orchestrator:latest` and `:<tag>`.
 |---|---|
 | `Program.cs` | ASP.NET Core host, Serilog, CORS, JSON profiles, DI, health checks and hosted services |
 | `Controllers/` | Anonymous REST controllers for nodes, templates, state, dashboard, variables, commands, reports and Matter |
-| `CustomJsonSettings/` | `json-naming-policy: pascal|lower` MVC input/output formatter profiles |
+| `CustomJsonSettings/` | `json-naming-policy: pascal\|lower` MVC input/output formatter profiles |
 | `Services/OrchestratorConfigurationService.cs` | Environment-variable configuration, stored node/dashboard configuration and template lookup |
 | `Services/OrchestratorMqttService.cs` | MQTT subscriptions/publications, state updates, Matter report mirroring and Elsa gRPC forwarding |
 | `Services/Persistence/` | File-backed `StoredObjects/<Type>/<Id>.json` object store |
@@ -57,7 +61,7 @@ pushes `ghcr.io/revolutionized-iot2/riot2-orchestrator:latest` and `:<tag>`.
 | `Services/WorkflowTriggerClient.cs` | Reused gRPC client/channel with a five-second workflow trigger deadline |
 | `Protos/riot_trigger.proto` | gRPC trigger contract, kept in lockstep with Elsa's `riot.proto` |
 | `Dockerfile` | .NET 10 multi-stage image; runtime is Alpine, non-root, HTTP port 8080 |
-| `.github/workflows/docker-image.yml` | Tag-triggered GHCR image publish workflow |
+| `.github/workflows/ci.yml`, `release.yml` | CI on every push; GHCR image release on a tag |
 
 ## Contracts implemented here
 
@@ -72,7 +76,7 @@ topic or environment-variable tables here.
   `Services/MqttHealthCheck.cs`.
 - [env-vars.md](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/env-vars.md):
   `Services/OrchestratorConfigurationService.cs`, `Dockerfile` and
-  `.github/workflows/docker-image.yml`.
+  `.github/workflows/release.yml`.
 - [configuration.md](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/configuration.md):
   `Services/OrchestratorConfigurationService.cs`, `Services/StoredObjectService.cs`,
   `Services/Persistence/FileObjectStore.cs` and `Services/Matter/`.

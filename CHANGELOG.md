@@ -5,6 +5,13 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+- Changed the Dockerfile: the GitHub Packages token is the BuildKit secret `nuget_token` and is no
+  longer stored in an image layer (`docker build --secret id=nuget_token,env=NUGET_AUTH_TOKEN`).
+  The `NUGET_AUTH_TOKEN` build argument is gone. `Data/Manifest.json` is written in the image from
+  the `VERSION` and `IMAGE_TAG` build arguments instead of being injected with `docker commit`.
+- Fixed: `FileObjectStore` rejects `\` in type names and ids on Linux too, not only on Windows.
+- CI: every push runs `ci.yml` (build, image build, secret scan); a tag runs `release.yml`, which
+  validates before it pushes the image.
 - Fixed (backlog item 20): `dotnet publish` from a developer checkout no longer copies
   `StoredObjects/` (node configurations with device credentials), `MatterCredentials/`, `Logs/` or
   `Data/` into the output, and `.dockerignore` also excludes `Data`.

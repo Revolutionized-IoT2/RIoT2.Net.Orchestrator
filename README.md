@@ -95,13 +95,12 @@ The Dockerfile uses multi-stage .NET 10 images. The runtime stage is `aspnet:10.
 the non-root .NET app user, and listens on HTTP port `8080`. The build stage stays on the Debian
 `sdk:10.0` image because `Grpc.Tools` needs glibc-linked `protoc`.
 
-Build from this repository root (`C:\Src\RIoT2\RIoT2.Net.Orchestrator`) with a package-feed token:
+Build from this repository root (`C:\Src\RIoT2\RIoT2.Net.Orchestrator`). The package-feed token
+is passed as a BuildKit secret, so it never lands in an image layer:
 
 ```powershell
-docker build `
-  --build-arg NUGET_AUTH_TOKEN=<github-package-token> `
-  --build-arg NUGET_URL=https://nuget.pkg.github.com/Revolutionized-IoT2/index.json `
-  -t riot2-orchestrator .
+$env:NUGET_AUTH_TOKEN = '<github-package-token>'
+docker build --secret id=nuget_token,env=NUGET_AUTH_TOKEN -t riot2-orchestrator .
 ```
 
 Run with explicit configuration:
@@ -140,8 +139,9 @@ next to this one.
 ## Versions and releases
 
 - Release notes are in [CHANGELOG.md](CHANGELOG.md).
-- To release, push a tag `x.y.z`. CI builds and pushes
-  `ghcr.io/revolutionized-iot2/riot2-orchestrator:latest` and `:<tag>`.
+- To release, push a tag `x.y.z`. The release workflow validates, then pushes
+  `ghcr.io/revolutionized-iot2/riot2-orchestrator:latest` and `:<tag>`. Every push runs CI
+  ([CI guide](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/guides/ci.md)).
 - The project references the published packages `RIoT2.Core` `1.0.1`, `RIoT2.Matter` `1.0.0`
   and `RIoT2.Matter.ControlBridge` `1.0.0`. To try unreleased versions, restore with
   `C:\Src\RIoT2\.localfeed` as an extra source.
