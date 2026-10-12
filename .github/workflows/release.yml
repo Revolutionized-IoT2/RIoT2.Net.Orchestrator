@@ -1,0 +1,26 @@
+name: Release
+
+# Push a x.y.z tag to release ghcr.io/revolutionized-iot2/riot2-orchestrator:<tag> and :latest.
+
+on:
+  push:
+    tags: ["*.*.*"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  validate:
+    uses: Revolutionized-IoT2/.github/.github/workflows/dotnet-validate.yml@main
+    with:
+      build: RIoT2.Net.Orchestrator.sln
+    secrets: inherit
+
+  image:
+    needs: validate
+    uses: Revolutionized-IoT2/.github/.github/workflows/docker-publish.yml@main
+    with:
+      image: riot2-orchestrator
+      push: true
+    secrets: inherit

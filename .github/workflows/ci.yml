@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dotnet:
+    uses: Revolutionized-IoT2/.github/.github/workflows/dotnet-validate.yml@main
+    with:
+      build: RIoT2.Net.Orchestrator.sln
+    secrets: inherit
+
+  image:
+    uses: Revolutionized-IoT2/.github/.github/workflows/docker-publish.yml@main
+    with:
+      image: riot2-orchestrator
+    secrets: inherit
+
+  secret-scan:
+    uses: Revolutionized-IoT2/.github/.github/workflows/secret-scan.yml@main

@@ -145,11 +145,9 @@ today.
   [7](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md),
   [13](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md),
   [14](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md),
-  [17](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md),
-  [18](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md) and
-  [20](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md).
-- Maintainer actions
-  [MA1](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/README.md#ma1-rotate-the-leaked-credentials-and-scrub-them-from-git-history) and
+  [17](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md) and
+  [18](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md).
+- Maintainer action
   [MA2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/README.md#ma2-cut-a-core-release-and-align-all-consumers).
 - Contract divergences
   [D1 and D2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/README.md#contract-divergences).
