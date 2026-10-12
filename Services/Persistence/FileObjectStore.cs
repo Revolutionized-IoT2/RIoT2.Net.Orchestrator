@@ -100,10 +100,11 @@ namespace RIoT2.Net.Orchestrator.Services.Persistence
             if (string.IsNullOrWhiteSpace(value))
                 throw new ArgumentException("A non-empty storage name is required.", parameterName);
 
+            // Both separators on every OS: on Linux '\' is a valid file name character, but a
+            // name with it would not be portable to a Windows store or a Windows developer box.
             if (value is "." or ".." ||
                 value.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
-                value.Contains(Path.DirectorySeparatorChar) ||
-                value.Contains(Path.AltDirectorySeparatorChar))
+                value.IndexOfAny(['/', '\\']) >= 0)
             {
                 throw new ArgumentException($"Storage name '{value}' contains invalid path characters.", parameterName);
             }
