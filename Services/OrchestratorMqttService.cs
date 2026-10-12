@@ -190,6 +190,8 @@ namespace RIoT2.Net.Orchestrator.Services
                 // in the window between subscription and handler registration.
                 _client.MessageReceived += _client_MessageReceived;
                 _client.ConnectedAsync += sendOrchestratorOnlineCommand;
+                // Replace the retained presence if the orchestrator stops or its connection drops.
+                _client.SetLastWill(Constants.Get("", MqttTopic.OrchestratorOnline), "{\"isOnline\":false}", true);
                 await _client.Start(_reportTopic, _nodeOnlineTopic);
             }
             catch (Exception x)

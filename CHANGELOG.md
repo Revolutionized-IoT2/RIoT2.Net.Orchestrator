@@ -5,6 +5,13 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+- Fixed the orchestrator presence after a crash (contract divergence D2). The last will and the
+  graceful stop now publish retained `{"isOnline":false}` on `riot2/orchestrator/online`, so a
+  late subscriber no longer sees a stale `true`. Previously the last will went to
+  `riot2/node/{orchestratorId}/online`. Subscribers already announce themselves on any message on
+  this topic, so no other component changes.
+- Changed the Core pin to `RIoT2.Core` 1.1.0.
+
 ## [1.0.1] - 2026-10-12
 
 Includes the I01 publish fix (backlog item 20). No deployment change.

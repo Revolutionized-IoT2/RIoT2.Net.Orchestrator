@@ -101,7 +101,7 @@ today.
   `Json.SerializeIgnoreNulls` for wire payloads that use Core models.
 - Keep `RIoT2.Core`, `RIoT2.Matter` and `RIoT2.Matter.ControlBridge` as package references. The
   Dockerfile restores from GitHub Packages and cannot see project references.
-- Current package pins are `RIoT2.Core` `1.0.1`, `RIoT2.Matter` `1.0.0` and
+- Current package pins are `RIoT2.Core` `1.1.0`, `RIoT2.Matter` `1.0.0` and
   `RIoT2.Matter.ControlBridge` `1.0.0`, all published. Use `C:\Src\RIoT2\.localfeed` as an extra
   NuGet source only to try unreleased versions.
 - Keep `PackageReference` items versionless; package versions belong in `Directory.Packages.props`.
@@ -131,8 +131,9 @@ today.
   call fails, or on shutdown. The in-memory workflow queue has capacity 1000 and no replay.
 - `POST /api/command/execute` returns after the command is published and state is set. It does not
   prove the device executed the command.
-- `OrchestratorMqttService` publishes retained `riot2/orchestrator/online`, but the Core MQTT
-  last will still targets `riot2/node/{orchestratorId}/online` (divergence D2).
+- `OrchestratorMqttService` publishes retained `{"isOnline":true}` on `riot2/orchestrator/online`
+  on every connect. Its last will (set with `MqttClient.SetLastWill` before `Start`) and its
+  graceful stop replace it with retained `{"isOnline":false}`.
 - .NET MQTT presence messages and last wills are not retained, while firmware presence is
   retained (divergence D1).
 - Some legacy `GET` endpoints mutate state (`delete`, `history/reset`, Matter commissioning,
@@ -154,7 +155,7 @@ today.
 - Maintainer action
   [MA2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/README.md#ma2-cut-a-core-release-and-align-all-consumers).
 - Contract divergences
-  [D1 and D2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/README.md#contract-divergences).
+  [D1](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/README.md#contract-divergences).
 - Plans
   [M2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/plans/m02-system-text-json-persistence.md),
   [M3](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/plans/m03-split-oversized-classes.md),
