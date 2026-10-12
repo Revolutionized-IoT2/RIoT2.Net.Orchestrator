@@ -5,15 +5,21 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
-- Changed target framework and Docker runtime image to .NET 10; the build image remains Debian
-  `sdk:10.0` for `Grpc.Tools`/`protoc`.
-- Changed package pins to `RIoT2.Core` 1.0.1 and `RIoT2.Matter` /
-  `RIoT2.Matter.ControlBridge` 0.1.15.
-- Updated gRPC dependencies to `Grpc.Net.Client` 2.84.0, `Grpc.Tools` 2.84.0 and
-  `Google.Protobuf` 3.36.2 through central package management.
 - Fixed (backlog item 20): `dotnet publish` from a developer checkout no longer copies
   `StoredObjects/` (node configurations with device credentials), `MatterCredentials/`, `Logs/` or
   `Data/` into the output, and `.dockerignore` also excludes `Data`.
+
+## [1.0.0] - 2026-10-12
+
+Built on `RIoT2.Core` 1.0.1 and .NET 10. See the
+[upgrade notes](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/guides/upgrading.md).
+
+- Changed target framework and Docker runtime image to .NET 10; the build image remains Debian
+  `sdk:10.0` for `Grpc.Tools`/`protoc`.
+- Changed package pins to `RIoT2.Core` 1.0.1 and `RIoT2.Matter` /
+  `RIoT2.Matter.ControlBridge` 1.0.0.
+- Updated gRPC dependencies to `Grpc.Net.Client` 2.84.0, `Grpc.Tools` 2.84.0 and
+  `Google.Protobuf` 3.36.2 through central package management.
 - Documentation: `AGENTS.md` is the AI instruction file, `CLAUDE.md` imports it, and repository
   guidance moved from the README and old instruction files into the standard layout.
 
