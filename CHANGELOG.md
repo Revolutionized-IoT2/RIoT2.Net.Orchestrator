@@ -5,6 +5,10 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-12
+
+Includes the I01 publish fix (backlog item 20). No deployment change.
+
 - Changed the Dockerfile: the GitHub Packages token is the BuildKit secret `nuget_token` and is no
   longer stored in an image layer (`docker build --secret id=nuget_token,env=NUGET_AUTH_TOKEN`).
   The `NUGET_AUTH_TOKEN` build argument is gone. `Data/Manifest.json` is written in the image from
