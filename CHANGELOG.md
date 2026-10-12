@@ -5,6 +5,8 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-12
+
 - Fixed the orchestrator presence after a crash (contract divergence D2). The last will and the
   graceful stop now publish retained `{"isOnline":false}` on `riot2/orchestrator/online`, so a
   late subscriber no longer sees a stale `true`. Previously the last will went to
