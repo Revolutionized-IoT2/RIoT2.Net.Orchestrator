@@ -15,6 +15,12 @@ Route contract and golden files ([I05](https://github.com/Revolutionized-IoT2/.g
   registered for two interfaces and was disposed twice. `DisposeAsync` is now idempotent.
 - Changed: the controller JSON settings are in `OrchestratorJsonOptions`, shared by the three
   naming profiles and the golden-file tests. Output is unchanged.
+- Fixed: concurrent calls of `OrchestratorMqttService.Stop` (a host stopped by its owner and by
+  `Run`) ran the shutdown twice and could race with disposal. They now share one stop
+  ([I06](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-0-1.md#i06-in-process-end-to-end-harness-m), found by the end-to-end tests).
+- Fixed: an empty or unreadable payload on `riot2/node/{id}/online` threw inside the MQTT queue
+  and was logged as an error; an empty payload, which clears a retained message, also caused a
+  `NullReferenceException`. Such a message is now ignored with a warning that shows the payload.
 
 ## [1.0.2] - 2026-10-12
 

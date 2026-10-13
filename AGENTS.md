@@ -20,6 +20,7 @@ Run from the workspace root (`C:\Src\RIoT2`), in PowerShell:
 ```powershell
 dotnet build .\RIoT2.Net.Orchestrator\RIoT2.Net.Orchestrator.csproj
 dotnet test .\RIoT2.Tests\RIoT2.Tests.csproj    # Cross-repository tests; project-references Core, Orchestrator and InfluxDB
+dotnet test .\RIoT2.Tests\RIoT2.Tests.Integration\RIoT2.Tests.Integration.csproj -c Release    # End-to-end: runs this Program with a broker, the Node and a workflow stub
 ```
 
 Run locally only after setting the required environment variables (`RIOT2_ORCHESTRATOR_ID`,
@@ -45,7 +46,9 @@ Every push runs `.github/workflows/ci.yml` (build, image build, secret scan). To
 clean git tag `x.y.z`: `release.yml` validates, then pushes
 `ghcr.io/revolutionized-iot2/riot2-orchestrator:latest` and `:<tag>` ([CI guide](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/guides/ci.md)). The
 Dockerfile writes `Data/Manifest.json` from the `VERSION` and `IMAGE_TAG` build arguments.
-The cross-repository tests in RIoT2.Tests build this repository's `main` nightly.
+The cross-repository tests in RIoT2.Tests build this repository's `main` nightly; the end-to-end
+tests run `Program.cs` itself, so a startup change that needs a new environment variable or service
+must keep them passing.
 
 ## Layout
 

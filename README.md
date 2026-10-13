@@ -135,6 +135,7 @@ From the workspace root (`C:\Src\RIoT2`):
 ```powershell
 dotnet build .\RIoT2.Net.Orchestrator\RIoT2.Net.Orchestrator.csproj
 dotnet test .\RIoT2.Tests\RIoT2.Tests.csproj
+dotnet test .\RIoT2.Tests\RIoT2.Tests.Integration\RIoT2.Tests.Integration.csproj -c Release
 ```
 
 Add `-p:CI=true` to `dotnet build` to reproduce CI analyzer settings locally. Package versions are
@@ -142,7 +143,8 @@ centralized in `Directory.Packages.props`; `PackageReference` items do not carry
 
 [RIoT2.Tests](https://github.com/Revolutionized-IoT2/RIoT2.Tests) references Core, the
 orchestrator and the InfluxDB connector as projects, so those repositories must be checked out
-next to this one.
+next to this one. Its [end-to-end tests](https://github.com/Revolutionized-IoT2/RIoT2.Tests/blob/main/README.md#end-to-end-tests) run this `Program` through
+`WebApplicationFactory`, with a broker, the Node and a workflow stub.
 
 ## Versions and releases
 

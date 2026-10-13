@@ -28,6 +28,8 @@ namespace RIoT2.Net.Orchestrator.Services
         private readonly Task _consumerTask;
         private readonly Task _workflowTask;
         private readonly WorkflowTriggerClient _workflowClient = new();
+        private readonly object _stopGate = new();
+        private Task _stopTask;
         private int _disposed;
 
         public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IMessageStateService deviceStateService, IStoredObjectService storedObjectService, IOnlineNodeService onlineNodeService, ILogger<OrchestratorMqttService> logger, IMatterReportSink matterSink = null, MqttClient mqttClient = null)
@@ -200,7 +202,14 @@ namespace RIoT2.Net.Orchestrator.Services
             }
         }
 
-        public async Task Stop()
+        // A host stopped by its owner and by Run calls this twice at the same time; both wait for one stop.
+        public Task Stop()
+        {
+            lock (_stopGate)
+                return _stopTask ??= StopCoreAsync();
+        }
+
+        private async Task StopCoreAsync()
         {
             _client.MessageReceived -= _client_MessageReceived;
             _client.ConnectedAsync -= sendOrchestratorOnlineCommand;
@@ -270,7 +279,14 @@ namespace RIoT2.Net.Orchestrator.Services
             }
             else if (MqttClient.IsMatch(mqttEventArgs.Topic, _nodeOnlineTopic))
             {
-                var onlineMessage = Json.Deserialize<NodeOnlineMessage>(mqttEventArgs.Message);
+                // An empty payload clears a retained message; anything else unreadable is a fault on the sender.
+                var onlineMessage = ReadOnlineMessage(mqttEventArgs.Message);
+                if (onlineMessage == null)
+                {
+                    _logger.LogWarning("Ignored an unreadable presence message on {Topic}: {Payload}",
+                        mqttEventArgs.Topic, Truncate(mqttEventArgs.Message, 200));
+                    return;
+                }
                 var clientId = Constants.GetTopicId(mqttEventArgs.Topic, MqttTopic.NodeOnline);
 
                 if (onlineMessage.IsOnline)
@@ -288,6 +304,23 @@ namespace RIoT2.Net.Orchestrator.Services
                     await SendConfigurationCommand(clientId);
             }
         }
+
+        private static NodeOnlineMessage ReadOnlineMessage(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+                return null;
+            try
+            {
+                return Json.Deserialize<NodeOnlineMessage>(json);
+            }
+            catch (Newtonsoft.Json.JsonException)
+            {
+                return null;
+            }
+        }
+
+        private static string Truncate(string value, int length) =>
+            value == null || value.Length <= length ? value : value[..length] + "...";
 
         private async Task DeliverWorkflowAsync(string url, TriggerRequest request, CancellationToken cancellationToken)
         {
