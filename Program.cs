@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Models;
 using RIoT2.Core.Services;
@@ -28,6 +29,13 @@ ILoggerFactory logger = LoggerFactory.Create(log =>
 });
 
 Microsoft.Extensions.Logging.ILogger orchestratorLogger = logger.CreateLogger("RIoT2.Net.Orchestrator");
+
+// Every RIOT2_* setting is read and validated here, before anything uses it; an invalid setting
+// stops the start with one message that lists every problem.
+var orchestratorOptions = generatingOpenApiDocument
+    ? new OrchestratorOptions()
+    : OrchestratorOptions.Load(builder.Configuration, orchestratorLogger);
+builder.Services.AddSingleton(Options.Create(orchestratorOptions));
 
 // Add services to the container.
 builder.Services.AddControllers()
@@ -82,7 +90,6 @@ var app = builder.Build();
 if (!generatingOpenApiDocument)
 {
     var orchestratorConfiguration = app.Services.GetRequiredService<IOrchestratorConfigurationService>().OrchestratorConfiguration;
-    OrchestratorConfigurationService.ValidateConfiguration(orchestratorConfiguration, orchestratorLogger);
     orchestratorLogger.LogInformation($"Services initialized. {orchestratorConfiguration.Manifest?.Name} - {orchestratorConfiguration.Manifest?.Version}");
 
     IHostApplicationLifetime lifetime = app.Lifetime;

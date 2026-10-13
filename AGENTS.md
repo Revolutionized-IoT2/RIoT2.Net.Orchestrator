@@ -58,7 +58,8 @@ must keep them passing.
 | `Controllers/` | Anonymous REST controllers for nodes, templates, state, dashboard, variables, commands, reports and Matter |
 | `CustomJsonSettings/` | `OrchestratorJsonOptions` (controller JSON settings) and the `json-naming-policy: pascal\|lower` MVC formatter profiles |
 | `openapi/riot2-orchestrator.json` | Generated OpenAPI document (the REST route contract), committed |
-| `Services/OrchestratorConfigurationService.cs` | Environment-variable configuration, stored node/dashboard configuration and template lookup |
+| `Services/OrchestratorOptions.cs` | Every `RIOT2_*` setting the orchestrator reads, validated at startup with Core's `SettingsReader` |
+| `Services/OrchestratorConfigurationService.cs` | Settings from `IOptions<OrchestratorOptions>`, stored node/dashboard configuration and template lookup |
 | `Services/OrchestratorMqttService.cs` | MQTT subscriptions/publications, state updates, Matter report mirroring and Elsa gRPC forwarding |
 | `Services/Persistence/` | File-backed `StoredObjects/<Type>/<Id>.json` object store |
 | `Services/Matter/` | Matter Control Bridge configuration, endpoint composition, commissioning and report/command bridging |
@@ -79,8 +80,9 @@ topic or environment-variable tables here.
   `Services/OrchestratorMqttService.cs`, `Services/MqttBackgroundService.cs` and
   `Services/MqttHealthCheck.cs`.
 - [env-vars.md](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/env-vars.md):
-  `Services/OrchestratorConfigurationService.cs`, `Dockerfile` and
-  `.github/workflows/release.yml`.
+  `Services/OrchestratorOptions.cs`, `Dockerfile` and `.github/workflows/release.yml`. A new
+  setting is added to `OrchestratorOptions` and to the contract; nothing else reads the
+  environment.
 - [configuration.md](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/configuration.md):
   `Services/OrchestratorConfigurationService.cs`, `Services/StoredObjectService.cs`,
   `Services/Persistence/FileObjectStore.cs` and `Services/Matter/`.

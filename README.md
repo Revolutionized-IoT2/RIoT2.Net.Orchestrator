@@ -18,7 +18,8 @@ How the orchestrator fits into the platform:
 | --- | --- |
 | `Program.cs` | Host setup, logging, CORS, JSON profiles, health checks and DI registration |
 | `Controllers/` | REST API controllers for nodes, templates, state, dashboard, variables, commands, reports and Matter |
-| `Services/OrchestratorConfigurationService.cs` | Environment configuration, stored configuration and template lookup |
+| `Services/OrchestratorOptions.cs` | The `RIOT2_*` settings, read and validated at startup |
+| `Services/OrchestratorConfigurationService.cs` | Settings, stored configuration and template lookup |
 | `Services/OrchestratorMqttService.cs` | MQTT report/command routing, state updates and workflow forwarding |
 | `Services/Persistence/FileObjectStore.cs` | File-backed JSON storage under `StoredObjects/` |
 | `Services/Matter/` | Matter Control Bridge configuration, commissioning and endpoint bridging |
@@ -29,8 +30,10 @@ How the orchestrator fits into the platform:
 
 ## Runtime configuration
 
-The required orchestrator settings are environment variables. Startup fails if a required value is
-missing or if `RIOT2_ORCHESTRATOR_URL` is not an absolute `http://` or `https://` URL.
+The orchestrator is configured with environment variables, read once at startup by
+`Services/OrchestratorOptions.cs`. Startup fails with one message that lists every missing or
+invalid setting, for example `Invalid orchestrator configuration: {problem}; {problem}.`
+`RIOT2_ORCHESTRATOR_URL` must be an absolute `http://` or `https://` URL.
 
 | Variable | Required | Purpose |
 | --- | ---: | --- |
