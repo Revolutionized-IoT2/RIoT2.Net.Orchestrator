@@ -19,6 +19,8 @@ jobs:
     uses: Revolutionized-IoT2/.github/.github/workflows/dotnet-validate.yml@main
     with:
       build: RIoT2.Net.Orchestrator.sln
+      # The build writes openapi/riot2-orchestrator.json; it must be committed (the UI route test).
+      verify-generated: true
     secrets: inherit
 
   image:

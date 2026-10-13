@@ -22,7 +22,8 @@ How the orchestrator fits into the platform:
 | `Services/OrchestratorMqttService.cs` | MQTT report/command routing, state updates and workflow forwarding |
 | `Services/Persistence/FileObjectStore.cs` | File-backed JSON storage under `StoredObjects/` |
 | `Services/Matter/` | Matter Control Bridge configuration, commissioning and endpoint bridging |
-| `CustomJsonSettings/` | Optional `json-naming-policy` formatter profiles |
+| `CustomJsonSettings/` | Controller JSON settings (`OrchestratorJsonOptions`) and the optional `json-naming-policy` formatter profiles |
+| `openapi/riot2-orchestrator.json` | OpenAPI document of the REST routes, written by every build and committed |
 | `Protos/riot_trigger.proto` | gRPC workflow trigger client contract |
 | `Dockerfile` | Multi-stage .NET 10 container image |
 
@@ -77,6 +78,13 @@ The orchestrator REST API is anonymous by design for the isolated single-user de
 CORS allows any origin, method and header. The route table lives in the platform
 [HTTP and gRPC API contract](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/http-api.md);
 this README intentionally does not duplicate it.
+
+Every build also writes the routes to [openapi/riot2-orchestrator.json](openapi/riot2-orchestrator.json)
+(`Microsoft.Extensions.ApiDescription.Server`). Commit it with the controller change: CI fails when
+a build changes it, and the UI tests check every URL the UI calls against it. Responses written with
+`Json.Serialize` appear without a schema; their formats are the
+[golden files](https://github.com/Revolutionized-IoT2/RIoT2.Core/blob/main/contracts/golden/README.md).
+The document isn't served at runtime.
 
 The orchestrator subscribes to node reports and node presence, publishes its retained online
 announcement, sends node configuration commands, publishes device commands, and publishes variable

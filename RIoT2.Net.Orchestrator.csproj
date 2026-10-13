@@ -14,6 +14,11 @@
 
   <ItemGroup>
     <PackageReference Include="RIoT2.Core" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.Extensions.ApiDescription.Server">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="QRCoder" />
     <PackageReference Include="RIoT2.Matter" />
     <PackageReference Include="RIoT2.Matter.ControlBridge" />
@@ -36,6 +41,20 @@
   <ItemGroup>
     <Content Remove="StoredObjects\**;MatterCredentials\**;Logs\**;Data\**" />
     <None Remove="StoredObjects\**;MatterCredentials\**;Logs\**;Data\**" />
+  </ItemGroup>
+
+  <!-- The REST route contract (plan M7 step 2): every build writes openapi/riot2-orchestrator.json,
+       which is committed. CI fails when a build changes it, and the UI tests check their routes
+       against it. Skipped in the SDK container, so image builds don't run the app. -->
+  <PropertyGroup>
+    <OpenApiDocumentsDirectory>$(MSBuildProjectDirectory)/openapi</OpenApiDocumentsDirectory>
+    <OpenApiGenerateDocumentsOptions>--file-name riot2-orchestrator</OpenApiGenerateDocumentsOptions>
+    <OpenApiGenerateDocuments Condition="'$(DOTNET_RUNNING_IN_CONTAINER)' == 'true'">false</OpenApiGenerateDocuments>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Remove="openapi\**" />
+    <None Include="openapi\**" />
   </ItemGroup>
 
   <ItemGroup>

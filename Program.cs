@@ -11,6 +11,10 @@ using Serilog;
 // Workflow nodes (e.g. Elsa) are reached over plain HTTP; allow cleartext HTTP/2 so Grpc.Net.Client can call them.
 AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 
+// The build-time OpenAPI generator (GetDocument.Insider) runs this entry point and starts the host
+// without the runtime environment, so the background services and startup checks are skipped.
+var generatingOpenApiDocument = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider";
+
 var builder = WebApplication.CreateBuilder(args);
 
 var serilog = new LoggerConfiguration()
@@ -27,30 +31,15 @@ Microsoft.Extensions.Logging.ILogger orchestratorLogger = logger.CreateLogger("R
 
 // Add services to the container.
 builder.Services.AddControllers()
-    .AddJsonOptions(o =>
-    {
-        o.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-        o.JsonSerializerOptions.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
-        o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
-        o.JsonSerializerOptions.WriteIndented = true;
-        o.JsonSerializerOptions.Converters.Add(new JObjectConverter());
-    })
-    .AddJsonOptions("pascal", o => //header json-naming-policy: pascal, This uses "original formatting"
-    {
-        o.JsonSerializerOptions.PropertyNamingPolicy = null;
-        o.JsonSerializerOptions.DictionaryKeyPolicy = null;
-        o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
-        o.JsonSerializerOptions.WriteIndented = true;
-        o.JsonSerializerOptions.Converters.Add(new JObjectConverter());
-    })
-    .AddJsonOptions("lower", o => //header json-naming-policy: lower
-    {
-        o.JsonSerializerOptions.PropertyNamingPolicy = new LowerCaseNamingPolicy();
-        o.JsonSerializerOptions.DictionaryKeyPolicy = new LowerCaseNamingPolicy();
-        o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
-        o.JsonSerializerOptions.WriteIndented = true;
-        o.JsonSerializerOptions.Converters.Add(new JObjectConverter());
-    });
+    .AddJsonOptions(o => OrchestratorJsonOptions.Configure(o.JsonSerializerOptions, JsonNamingPolicy.CamelCase))
+    //header json-naming-policy: pascal, This uses "original formatting"
+    .AddJsonOptions("pascal", o => OrchestratorJsonOptions.Configure(o.JsonSerializerOptions, null))
+    //header json-naming-policy: lower
+    .AddJsonOptions("lower", o => OrchestratorJsonOptions.Configure(o.JsonSerializerOptions, new LowerCaseNamingPolicy()));
+
+// The OpenAPI document is generated at build time into openapi/ (the REST route contract, plan M7
+// step 2); it isn't served at runtime.
+builder.Services.AddOpenApi();
 
 builder.Services.AddSingleton<Microsoft.Extensions.Logging.ILogger>(orchestratorLogger);
 builder.Services.AddSingleton<IObjectStore, FileObjectStore>();
@@ -68,11 +57,14 @@ builder.Services.AddSingleton<MatterConfigurationStore>();
 builder.Services.AddSingleton<IMatterBridgeService, MatterBridgeService>();
 builder.Services.AddSingleton<IMatterReportSink>(s => s.GetRequiredService<IMatterBridgeService>());
 
-//Start Mqtt Background service...
-builder.Services.AddHostedService<MqttBackgroundService>();
+if (!generatingOpenApiDocument)
+{
+    //Start Mqtt Background service...
+    builder.Services.AddHostedService<MqttBackgroundService>();
 
-//Start the Matter bridge with the application (it does nothing when disabled in its configuration)...
-builder.Services.AddHostedService<MatterBackgroundService>();
+    //Start the Matter bridge with the application (it does nothing when disabled in its configuration)...
+    builder.Services.AddHostedService<MatterBackgroundService>();
+}
 
 builder.Services.AddCors(options =>
 {
@@ -87,16 +79,19 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-var orchestratorConfiguration = app.Services.GetRequiredService<IOrchestratorConfigurationService>().OrchestratorConfiguration;
-OrchestratorConfigurationService.ValidateConfiguration(orchestratorConfiguration, orchestratorLogger);
-orchestratorLogger.LogInformation($"Services initialized. {orchestratorConfiguration.Manifest?.Name} - {orchestratorConfiguration.Manifest?.Version}");
-
-IHostApplicationLifetime lifetime = app.Lifetime;
-lifetime.ApplicationStarted.Register(() =>
+if (!generatingOpenApiDocument)
 {
-    foreach (var variable in app.Services.GetService<IStoredObjectService>().GetAll<Variable>())
-        app.Services.GetService<IMessageStateService>().SetState(variable.CreateReport());
-});
+    var orchestratorConfiguration = app.Services.GetRequiredService<IOrchestratorConfigurationService>().OrchestratorConfiguration;
+    OrchestratorConfigurationService.ValidateConfiguration(orchestratorConfiguration, orchestratorLogger);
+    orchestratorLogger.LogInformation($"Services initialized. {orchestratorConfiguration.Manifest?.Name} - {orchestratorConfiguration.Manifest?.Version}");
+
+    IHostApplicationLifetime lifetime = app.Lifetime;
+    lifetime.ApplicationStarted.Register(() =>
+    {
+        foreach (var variable in app.Services.GetService<IStoredObjectService>().GetAll<Variable>())
+            app.Services.GetService<IMessageStateService>().SetState(variable.CreateReport());
+    });
+}
 
 // Configure the HTTP request pipeline.
 

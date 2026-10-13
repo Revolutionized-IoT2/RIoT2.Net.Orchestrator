@@ -49,6 +49,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         // Serialises start/stop/refresh: all of them add or remove bridged endpoints, and the UI can call
         // them while the hosted service is still starting the bridge.
         private readonly SemaphoreSlim _gate = new(1, 1);
+        private int _disposed;
 
         // Copied on read so OnReport can walk the adapters without holding the gate on the MQTT thread.
         private volatile RiotBridgedDeviceAdapter[] _adapters = [];
@@ -303,6 +304,11 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         /// <inheritdoc />
         public async ValueTask DisposeAsync()
         {
+            // The container disposes this instance once per registration (IMatterBridgeService and
+            // IMatterReportSink), so a second call must do nothing.
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                return;
+
             await _gate.WaitAsync();
             try
             {

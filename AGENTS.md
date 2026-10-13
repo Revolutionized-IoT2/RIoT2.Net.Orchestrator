@@ -53,7 +53,8 @@ The cross-repository tests in RIoT2.Tests build this repository's `main` nightly
 |---|---|
 | `Program.cs` | ASP.NET Core host, Serilog, CORS, JSON profiles, DI, health checks and hosted services |
 | `Controllers/` | Anonymous REST controllers for nodes, templates, state, dashboard, variables, commands, reports and Matter |
-| `CustomJsonSettings/` | `json-naming-policy: pascal\|lower` MVC input/output formatter profiles |
+| `CustomJsonSettings/` | `OrchestratorJsonOptions` (controller JSON settings) and the `json-naming-policy: pascal\|lower` MVC formatter profiles |
+| `openapi/riot2-orchestrator.json` | Generated OpenAPI document (the REST route contract), committed |
 | `Services/OrchestratorConfigurationService.cs` | Environment-variable configuration, stored node/dashboard configuration and template lookup |
 | `Services/OrchestratorMqttService.cs` | MQTT subscriptions/publications, state updates, Matter report mirroring and Elsa gRPC forwarding |
 | `Services/Persistence/` | File-backed `StoredObjects/<Type>/<Id>.json` object store |
@@ -117,9 +118,19 @@ today.
   `RIOT2_USE_EXTERNAL_WORKFLOW_ENGINE` switch.
 - Preserve the `json-naming-policy` header profiles until M2 removes them through a compatibility
   plan.
+- A route change must commit the regenerated `openapi/riot2-orchestrator.json`; CI
+  (`verify-generated`) fails otherwise, and the RIoT2.UI route test reads it. A change to a response
+  or stored format must regenerate the golden files in `RIoT2.Core/contracts/golden` (RIoT2.Tests
+  with `RIOT2_UPDATE_GOLDEN=1`).
 
 ## Pitfalls
 
+- The build-time OpenAPI generator runs `Program.cs` and starts the host. `Program.cs` therefore
+  skips the hosted services, configuration validation and startup work when the entry assembly is
+  `GetDocument.Insider`; keep new startup side effects inside that check. Generation is off in the
+  SDK container (`DOTNET_RUNNING_IN_CONTAINER`).
+- `MatterBridgeService` is registered as `IMatterBridgeService` and, through a factory, as
+  `IMatterReportSink`, so the container disposes it twice; `DisposeAsync` must stay idempotent.
 - The Web SDK includes `**/*.json` as content. The `.csproj` therefore excludes `StoredObjects/`,
   `MatterCredentials/`, `Logs/` and `Data/` from publish, and `.dockerignore` excludes them from
   the Docker context (backlog item
