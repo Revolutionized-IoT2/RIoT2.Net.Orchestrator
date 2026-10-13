@@ -5,6 +5,17 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-13
+
+MQTT client robustness ([I08](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-0-1.md#i08-mqtt-client-robustness-m)). Built on `RIoT2.Core` 1.3.0. No deployment change is needed.
+
+- Changed: the orchestrator publishes and subscribes at QoS 1, keeps at most 10,000 outgoing messages
+  while the broker is unreachable (the oldest are dropped and logged), and logs a failing MQTT
+  handler instead of losing it.
+- Added `RIOT2_MQTT_PORT` (default 1883) for a broker on another port.
+- Changed: received MQTT messages are queued for processing asynchronously; when the queue is
+  full, the client stops reading and QoS 1 redelivers.
+
 ## [1.1.0] - 2026-10-13
 
 Typed configuration ([I07](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-0-1.md#i07-typed-configuration-s)), the route contract and golden files (I05), and fixes found by the

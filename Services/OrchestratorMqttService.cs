@@ -44,10 +44,7 @@ namespace RIoT2.Net.Orchestrator.Services
             _reportTopic = Constants.Get("+", MqttTopic.Report); // Orchestrator is listening all reports...
             _nodeOnlineTopic = Constants.Get("+", MqttTopic.NodeOnline); // Orchestrator is listening all nodes...
 
-            _client = mqttClient ?? new MqttClient(_configuration.OrchestratorConfiguration.Mqtt.ClientId,
-                _configuration.OrchestratorConfiguration.Mqtt.ServerUrl,
-                _configuration.OrchestratorConfiguration.Mqtt.Username,
-                _configuration.OrchestratorConfiguration.Mqtt.Password);
+            _client = mqttClient ?? new MqttClient(_configuration.OrchestratorConfiguration.Mqtt, logger);
 
             _workQueue = Channel.CreateBounded<Func<Task>>(new BoundedChannelOptions(1000)
             {
@@ -166,14 +163,14 @@ namespace RIoT2.Net.Orchestrator.Services
 
         public async Task SendCommand(string topic, Command command)
         {
-            await _client.Publish(topic, Json.SerializeIgnoreNulls(command));
+            await _client.PublishAsync(topic, Json.SerializeIgnoreNulls(command));
             _deviceStateService.SetState(command);
         }
 
         public async Task SendConfigurationCommand(string id)
         {
             var configurationCommandTopic = Constants.Get(id, MqttTopic.Configuration);
-            await _client.Publish(configurationCommandTopic, Json.SerializeIgnoreNulls(generateConfigurationCommand(id)));
+            await _client.PublishAsync(configurationCommandTopic, Json.SerializeIgnoreNulls(generateConfigurationCommand(id)));
         }
 
         public bool IsConnected => _client?.IsConnected() == true;
@@ -181,7 +178,7 @@ namespace RIoT2.Net.Orchestrator.Services
         private async Task sendOrchestratorOnlineCommand()
         {
             //Retain message so nodes can get orchestrator info on reconnect
-            await _client.Publish(Constants.Get("", MqttTopic.OrchestratorOnline), "{\"isOnline\":true}", true);
+            await _client.PublishAsync(Constants.Get("", MqttTopic.OrchestratorOnline), "{\"isOnline\":true}", retain: true);
         }
 
         public async Task Start()
@@ -190,7 +187,7 @@ namespace RIoT2.Net.Orchestrator.Services
             {
                 // Attach the handler before subscribing so no messages are missed
                 // in the window between subscription and handler registration.
-                _client.MessageReceived += _client_MessageReceived;
+                _client.MessageReceivedAsync += _client_MessageReceivedAsync;
                 _client.ConnectedAsync += sendOrchestratorOnlineCommand;
                 // Replace the retained presence if the orchestrator stops or its connection drops.
                 _client.SetLastWill(Constants.Get("", MqttTopic.OrchestratorOnline), "{\"isOnline\":false}", true);
@@ -211,7 +208,7 @@ namespace RIoT2.Net.Orchestrator.Services
 
         private async Task StopCoreAsync()
         {
-            _client.MessageReceived -= _client_MessageReceived;
+            _client.MessageReceivedAsync -= _client_MessageReceivedAsync;
             _client.ConnectedAsync -= sendOrchestratorOnlineCommand;
             _storedObjectService.StoredObjectEvent -= IStoredObjectService_StoredObjectEvent;
             _workQueue.Writer.TryComplete();
@@ -235,9 +232,21 @@ namespace RIoT2.Net.Orchestrator.Services
         }
 
         // Only state processing can exert backpressure here; workflow delivery has its own bounded queue.
-        private void _client_MessageReceived(MqttEventArgs mqttEventArgs)
+        private async Task _client_MessageReceivedAsync(MqttEventArgs mqttEventArgs)
         {
-            Enqueue(() => HandleMessageAsync(mqttEventArgs));
+            try
+            {
+                // Waits while the queue is full; the MQTT client then stops reading, and QoS 1 redelivers.
+                await _workQueue.Writer.WriteAsync(() => HandleMessageAsync(mqttEventArgs), _cts.Token);
+            }
+            catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+            {
+                _logger.LogWarning("Could not enqueue MQTT work item; service is stopping");
+            }
+            catch (ChannelClosedException)
+            {
+                _logger.LogWarning("Could not enqueue MQTT work item; queue is completed");
+            }
         }
 
         internal async Task HandleMessageAsync(MqttEventArgs mqttEventArgs)
@@ -368,7 +377,7 @@ namespace RIoT2.Net.Orchestrator.Services
         {
             var id = _configuration.OrchestratorConfiguration.Id;
             var topic = Constants.Get(id, MqttTopic.Report);
-            await _client.Publish(topic, report.ToJson());
+            await _client.PublishAsync(topic, report.ToJson());
         }
     }
 }

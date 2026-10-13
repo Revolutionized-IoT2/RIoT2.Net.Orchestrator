@@ -39,7 +39,8 @@ invalid setting, for example `Invalid orchestrator configuration: {problem}; {pr
 | --- | ---: | --- |
 | `RIOT2_ORCHESTRATOR_ID` | Yes | MQTT client id and id for orchestrator-owned variable reports |
 | `RIOT2_ORCHESTRATOR_URL` | Yes | Base URL sent to nodes in `ConfigurationCommand.apiBaseUrl`; must be reachable by nodes and firmware |
-| `RIOT2_MQTT_IP` | Yes | MQTT broker host/IP; .NET MQTT currently uses port 1883 |
+| `RIOT2_MQTT_IP` | Yes | MQTT broker host/IP |
+| `RIOT2_MQTT_PORT` | No | MQTT broker port; default 1883 |
 | `RIOT2_MQTT_USERNAME` | No | MQTT username; leave empty for an anonymous broker |
 | `RIOT2_MQTT_PASSWORD` | No | MQTT password |
 
