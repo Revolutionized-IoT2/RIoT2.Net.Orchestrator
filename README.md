@@ -147,11 +147,15 @@ docker run --rm -p 8080:8080 `
   riot2-orchestrator
 ```
 
-Use `/health` for container or orchestrator health checks. It is `Unhealthy` while the MQTT client
+Use `/health` for container or orchestrator health checks; the image's `HEALTHCHECK` calls it, so
+`docker ps` shows the state. It is `Unhealthy` while the MQTT client
 is disconnected from the broker, and `Degraded` (still HTTP 200) when more than 500 workflow
-triggers are pending or one is older than half its time-to-live. For persistent deployments, bind-mount writable directories for
-`/app/StoredObjects`, `/app/Logs` and `/app/MatterCredentials`; Matter commissioning usually also
-needs host networking for mDNS and IPv6.
+triggers are pending or one is older than half its time-to-live. For persistent deployments, mount writable directories or volumes for
+`/app/StoredObjects`, `/app/Logs` and `/app/MatterCredentials`. Don't mount `/app/Data`: it only
+holds the image's `Manifest.json`. Matter commissioning usually also
+needs host networking for mDNS and IPv6. The compose file in
+[deploy/](https://github.com/Revolutionized-IoT2/.github/tree/main/deploy) runs the orchestrator
+with the rest of the stack (`compose.matter.yml` for host networking).
 
 ## Build and test
 

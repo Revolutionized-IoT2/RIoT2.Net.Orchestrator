@@ -45,6 +45,8 @@ WORKDIR /app
 COPY --from=publish /app/publish .
 RUN printf '{ "name": "RIoT2 Orchestrator", "date": "%s", "version": "%s", "installedPackageFilename": "%s" }\n' \
       "$(date -u +%Y-%m-%dT%H:%M:%S)" "$VERSION" "$IMAGE_TAG" > /app/Data/Manifest.json
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD wget -q -O- "http://127.0.0.1:${ASPNETCORE_HTTP_PORTS%%;*}/health" || exit 1
 ENTRYPOINT ["dotnet", "RIoT2.Net.Orchestrator.dll"]
 
 #Set default environment variables

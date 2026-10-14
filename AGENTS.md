@@ -46,7 +46,8 @@ docker build --secret id=nuget_token,env=NUGET_AUTH_TOKEN -t riot2-orchestrator 
 Every push runs `.github/workflows/ci.yml` (build, image build, secret scan). To release, push a
 clean git tag `x.y.z`: `release.yml` validates, then pushes
 `ghcr.io/revolutionized-iot2/riot2-orchestrator:latest` and `:<tag>` ([CI guide](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/guides/ci.md)). The
-Dockerfile writes `Data/Manifest.json` from the `VERSION` and `IMAGE_TAG` build arguments.
+Dockerfile writes `Data/Manifest.json` from the `VERSION` and `IMAGE_TAG` build arguments, and has
+a `HEALTHCHECK` on `/health` that reads the port from `ASPNETCORE_HTTP_PORTS`.
 The cross-repository tests in RIoT2.Tests build this repository's `main` nightly; the end-to-end
 tests run `Program.cs` itself, so a startup change that needs a new environment variable or service
 must keep them passing.
@@ -176,8 +177,8 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   refresh and reset). Keep them only for compatibility.
 - `Json.Serialize` camel-cases dictionary keys. Configuration `deviceParameters` should use
   camelCase keys because device lookups are case-sensitive.
-- Docker CI injects `Data/Manifest.json` with `docker create`, `docker cp` and `docker commit`.
-  That is existing release behavior, not a pattern to expand.
+- `Data/Manifest.json` is written into the image at build time. Don't make `/app/Data` a volume:
+  a mount would hide it or keep an old copy. Persistent data belongs in `StoredObjects/`.
 
 ## Related work
 

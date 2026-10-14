@@ -5,6 +5,14 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-10-14
+
+Image for the compose install ([I12](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-0-1.md#i12-one-command-install-s)). No code, port, user or variable changes.
+
+- Added: a Docker `HEALTHCHECK` on `/health` (MQTT connection and outbox), on the port in
+  `ASPNETCORE_HTTP_PORTS`, so `docker ps` and compose's `service_healthy` see the orchestrator's
+  state.
+
 ## [1.3.0] - 2026-10-14
 
 Durable workflow delivery ([I11](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-0-1.md#i11-durable-workflow-delivery-m),
