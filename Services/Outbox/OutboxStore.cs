@@ -83,6 +83,35 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
                 ("$id", id), ("$status", status), ("$now", now), ("$result", result), ("$error", error));
         }
 
+        /// <summary>
+        /// Records a receiver's answer that arrived after its delivery attempt gave up waiting: the message
+        /// becomes final unless it already is. An expired message takes the answer too, because the
+        /// receiver got it in time. Returns <c>false</c> when the message is unknown, belongs to
+        /// another target or is already final.
+        /// </summary>
+        public bool CompleteLate(string id, string target, string status, long now, string result, string error = null)
+        {
+            if (status == OutboxStatus.Pending)
+                throw new ArgumentException("A final status is required.", nameof(status));
+            return Execute("UPDATE outbox SET status = $status, updated_utc = $now, result = $result, last_error = COALESCE($error, last_error) WHERE id = $id AND target = $target AND status IN ('pending', 'expired')",
+                ("$id", id), ("$target", target), ("$status", status), ("$now", now), ("$result", result), ("$error", error)) > 0;
+        }
+
+        /// <summary>The targets that have pending messages of <paramref name="kind"/>.</summary>
+        public IReadOnlyList<string> PendingTargets(string kind)
+        {
+            lock (_gate)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                using var command = Command("SELECT DISTINCT target FROM outbox WHERE kind = $kind AND status = 'pending' ORDER BY target", ("$kind", kind));
+                using var reader = command.ExecuteReader();
+                var targets = new List<string>();
+                while (reader.Read())
+                    targets.Add(reader.GetString(0));
+                return targets;
+            }
+        }
+
         /// <summary>Records a failed attempt; the message stays pending until <paramref name="nextAttempt"/>.</summary>
         public void ScheduleRetry(string id, int attempts, long nextAttempt, long now, string error)
         {

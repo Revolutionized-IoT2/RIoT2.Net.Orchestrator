@@ -66,6 +66,8 @@ namespace RIoT2.Net.Orchestrator.Controllers
         }
 
         [HttpGet("reports/history/reset")]
+        [HttpDelete("/api/v2/reports/history")]
+        [DeprecatedGetAlias("DELETE /api/v2/reports/history")]
         public IActionResult ResetReportHistory()
         {
             _messageStateService.Reset();

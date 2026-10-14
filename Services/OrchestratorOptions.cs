@@ -10,6 +10,7 @@ namespace RIoT2.Net.Orchestrator.Services
         public const string IdVariable = "RIOT2_ORCHESTRATOR_ID";
         public const string UrlVariable = "RIOT2_ORCHESTRATOR_URL";
         public const string WorkflowTriggerTtlVariable = "RIOT2_OUTBOX_WORKFLOW_TTL";
+        public const string CommandTtlVariable = "RIOT2_OUTBOX_COMMAND_TTL";
 
         /// <summary>Unique id; also the MQTT client id.</summary>
         public string Id { get; set; }
@@ -26,6 +27,12 @@ namespace RIoT2.Net.Orchestrator.Services
         public TimeSpan WorkflowTriggerTtl { get; set; } = TimeSpan.FromSeconds(300);
 
         /// <summary>
+        /// How long a command waits in the outbox for its node before it expires, unless the request
+        /// sets <c>ttlSeconds</c> (design 7.1). <c>RIOT2_OUTBOX_COMMAND_TTL</c> in seconds, 1–86400; default 30.
+        /// </summary>
+        public TimeSpan CommandTtl { get; set; } = TimeSpan.FromSeconds(30);
+
+        /// <summary>
         /// Reads and validates the settings, and throws <see cref="ConfigurationValidationException"/>
         /// listing every problem (logged as critical) when any is missing or invalid.
         /// </summary>
@@ -37,7 +44,8 @@ namespace RIoT2.Net.Orchestrator.Services
                 Id = settings.Required(IdVariable),
                 Url = settings.RequiredHttpUrl(UrlVariable),
                 Mqtt = MqttOptions.Read(settings),
-                WorkflowTriggerTtl = TimeSpan.FromSeconds(settings.Integer(WorkflowTriggerTtlVariable, 300, 1, 86400))
+                WorkflowTriggerTtl = TimeSpan.FromSeconds(settings.Integer(WorkflowTriggerTtlVariable, 300, 1, 86400)),
+                CommandTtl = TimeSpan.FromSeconds(settings.Integer(CommandTtlVariable, 30, 1, 86400))
             };
             settings.ThrowIfInvalid("orchestrator", logger);
             return options;

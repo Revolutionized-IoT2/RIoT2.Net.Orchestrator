@@ -4,11 +4,12 @@ using RIoT2.Core.Utils;
 using RIoT2.Core;
 using RIoT2.Core.Models;
 using RIoT2.Net.Orchestrator.Services.Automation;
+using RIoT2.Net.Orchestrator.Services.Commands;
 using RIoT2.Net.Orchestrator.Services.Matter;
 
 namespace RIoT2.Net.Orchestrator.Services
 {
-    internal class OrchestratorMqttService : IOrchestratorMqttService, IDisposable, IAsyncDisposable
+    internal class OrchestratorMqttService : IOrchestratorMqttService, ICommandTransport, IDisposable, IAsyncDisposable
     {
         private MqttClient _client;
         private readonly IOrchestratorConfigurationService _configuration;
@@ -16,11 +17,13 @@ namespace RIoT2.Net.Orchestrator.Services
         private readonly IStoredObjectService _storedObjectService;
         private readonly IOnlineNodeService _onlineNodeService;
         private readonly IAutomationProvider _automation;
+        private readonly ICommandOutbox _commands;
         private readonly IMatterReportSink _matterSink;
         private readonly ILogger _logger;
 
         private string _reportTopic;
         private string _nodeOnlineTopic;
+        private string _commandResultTopic;
 
         // Bounded queue decouples MQTT callback threads / event handlers from processing.
         private readonly Channel<Func<Task>> _workQueue;
@@ -30,7 +33,7 @@ namespace RIoT2.Net.Orchestrator.Services
         private Task _stopTask;
         private int _disposed;
 
-        public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IMessageStateService deviceStateService, IStoredObjectService storedObjectService, IOnlineNodeService onlineNodeService, IAutomationProvider automation, ILogger<OrchestratorMqttService> logger, IMatterReportSink matterSink = null, MqttClient mqttClient = null)
+        public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IMessageStateService deviceStateService, IStoredObjectService storedObjectService, IOnlineNodeService onlineNodeService, IAutomationProvider automation, ICommandOutbox commands, ILogger<OrchestratorMqttService> logger, IMatterReportSink matterSink = null, MqttClient mqttClient = null)
         {
             _logger = logger;
             _storedObjectService = storedObjectService;
@@ -38,10 +41,12 @@ namespace RIoT2.Net.Orchestrator.Services
             _deviceStateService = deviceStateService;
             _onlineNodeService = onlineNodeService;
             _automation = automation ?? throw new ArgumentNullException(nameof(automation));
+            _commands = commands ?? throw new ArgumentNullException(nameof(commands));
             _matterSink = matterSink;
 
             _reportTopic = Constants.Get("+", MqttTopic.Report); // Orchestrator is listening all reports...
             _nodeOnlineTopic = Constants.Get("+", MqttTopic.NodeOnline); // Orchestrator is listening all nodes...
+            _commandResultTopic = Constants.Get("+", MqttTopic.CommandResult); // ...and every node's command results (design 7.1)
 
             _client = mqttClient ?? new MqttClient(_configuration.OrchestratorConfiguration.Mqtt, logger);
 
@@ -55,6 +60,7 @@ namespace RIoT2.Net.Orchestrator.Services
             _consumerTask = ProcessQueueAsync(_workQueue.Reader, "MQTT", _cts.Token);
 
             _storedObjectService.StoredObjectEvent += IStoredObjectService_StoredObjectEvent;
+            _commands.UseTransport(this);
         }
 
         // Single consumer loop: sequential, centrally guarded processing of queued work.
@@ -164,10 +170,14 @@ namespace RIoT2.Net.Orchestrator.Services
 
         public bool IsConnected => _client?.IsConnected() == true;
 
+        Task ICommandTransport.PublishCommandAsync(string nodeId, string payload) =>
+            _client.PublishAsync(Constants.Get(nodeId, MqttTopic.Command), payload);
+
         private async Task sendOrchestratorOnlineCommand()
         {
             //Retain message so nodes can get orchestrator info on reconnect
             await _client.PublishAsync(Constants.Get("", MqttTopic.OrchestratorOnline), "{\"isOnline\":true}", retain: true);
+            _commands.TransportConnected();
         }
 
         public async Task Start()
@@ -180,7 +190,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 _client.ConnectedAsync += sendOrchestratorOnlineCommand;
                 // Replace the retained presence if the orchestrator stops or its connection drops.
                 _client.SetLastWill(Constants.Get("", MqttTopic.OrchestratorOnline), "{\"isOnline\":false}", true);
-                await _client.Start(_reportTopic, _nodeOnlineTopic);
+                await _client.Start(_reportTopic, _nodeOnlineTopic, _commandResultTopic);
             }
             catch (Exception x)
             {
@@ -273,9 +283,21 @@ namespace RIoT2.Net.Orchestrator.Services
                 else
                     _onlineNodeService.Remove(clientId);
                 _automation.NodeOnlineChanged(clientId, onlineMessage);
+                _commands.NodeOnlineChanged(clientId, onlineMessage);
                 _matterSink?.OnNodeOnlineChanged(clientId, onlineMessage.IsOnline);
                 if (onlineMessage.IsOnline)
                     await SendConfigurationCommand(clientId);
+            }
+            else if (MqttClient.IsMatch(mqttEventArgs.Topic, _commandResultTopic))
+            {
+                var result = CommandResult.Create(mqttEventArgs.Message);
+                if (result == null)
+                {
+                    _logger.LogWarning("Ignored an unreadable command result on {Topic}: {Payload}",
+                        mqttEventArgs.Topic, Truncate(mqttEventArgs.Message, 200));
+                    return;
+                }
+                _commands.ResultReceived(Constants.GetTopicId(mqttEventArgs.Topic, MqttTopic.CommandResult), result);
             }
         }
 
@@ -304,23 +326,25 @@ namespace RIoT2.Net.Orchestrator.Services
             };
         }
 
-        public async Task<bool> ExecuteCommand(Command command)
+        // Every command goes through the outbox (design 7.1): it waits while its node is offline, and is
+        // retried until the node answers or its time-to-live passes. Returns false for an unknown command.
+        public Task<bool> ExecuteCommand(Command command)
         {
             if (command == null || String.IsNullOrWhiteSpace(command.Id))
             {
                 _logger.LogWarning("Could not execute command without an identifier");
-                return false;
+                return Task.FromResult(false);
             }
 
             var outputNodeId = _configuration.FindNodeId(command.Id);
             if (String.IsNullOrEmpty(outputNodeId))
             {
                 _logger.LogWarning("Could not find a node for command {CommandId}", command.Id);
-                return false;
+                return Task.FromResult(false);
             }
 
-            await SendCommand(Constants.Get(outputNodeId, MqttTopic.Command), command);
-            return true;
+            _commands.Enqueue(command, outputNodeId);
+            return Task.FromResult(true);
         }
 
         //This method send orchestrator reports to mqtt

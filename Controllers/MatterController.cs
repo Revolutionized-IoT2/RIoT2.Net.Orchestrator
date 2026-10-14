@@ -74,6 +74,8 @@ namespace RIoT2.Net.Orchestrator.Controllers
 
         /// <summary>Re-opens the pairing window so the bridge can be added to another ecosystem.</summary>
         [HttpGet("commissioning/open")]
+        [HttpPost("/api/v2/matter/commissioning/open")]
+        [DeprecatedGetAlias("POST /api/v2/matter/commissioning/open")]
         public IActionResult OpenCommissioning()
         {
             try
@@ -89,6 +91,8 @@ namespace RIoT2.Net.Orchestrator.Controllers
 
         /// <summary>Recomposes the bridged endpoints from the current node configuration.</summary>
         [HttpGet("devices/refresh")]
+        [HttpPost("/api/v2/matter/devices/refresh")]
+        [DeprecatedGetAlias("POST /api/v2/matter/devices/refresh")]
         public async Task<IActionResult> RefreshDevicesAsync()
         {
             try
@@ -107,6 +111,8 @@ namespace RIoT2.Net.Orchestrator.Controllers
         /// bridge comes back with a new pairing code.
         /// </summary>
         [HttpGet("reset")]
+        [HttpPost("/api/v2/matter/reset")]
+        [DeprecatedGetAlias("POST /api/v2/matter/reset")]
         public async Task<IActionResult> ResetAsync()
         {
             try

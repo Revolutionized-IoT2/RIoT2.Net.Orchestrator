@@ -5,6 +5,7 @@ using RIoT2.Core.Services;
 using RIoT2.Net.Orchestrator.CustomJsonSettings;
 using RIoT2.Net.Orchestrator.Services;
 using RIoT2.Net.Orchestrator.Services.Automation;
+using RIoT2.Net.Orchestrator.Services.Commands;
 using RIoT2.Net.Orchestrator.Services.Outbox;
 using RIoT2.Net.Orchestrator.Services.Matter;
 using RIoT2.Net.Orchestrator.Services.Persistence;
@@ -62,6 +63,9 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(s => OutboxStore.Open(s.GetRequiredService<IWebHostEnvironment>()));
 builder.Services.AddSingleton<ElsaAutomationProvider>();
 builder.Services.AddSingleton<IAutomationProvider>(s => s.GetRequiredService<ElsaAutomationProvider>());
+// Commands go through the same outbox, one dispatcher per node, and nodes answer with results.
+builder.Services.AddSingleton<CommandOutbox>();
+builder.Services.AddSingleton<ICommandOutbox>(s => s.GetRequiredService<CommandOutbox>());
 builder.Services.AddSingleton<OrchestratorMqttService>();
 builder.Services.AddSingleton<IOrchestratorMqttService>(s => s.GetRequiredService<OrchestratorMqttService>());
 builder.Services.AddHealthChecks()
@@ -82,6 +86,9 @@ if (!generatingOpenApiDocument)
     // Delivers the outbox's workflow triggers. Registered after MQTT, so it stops first, and the reports
     // MQTT still drains while stopping are stored for the next start.
     builder.Services.AddHostedService(s => s.GetRequiredService<ElsaAutomationProvider>());
+
+    // Delivers the outbox's commands; also registered after MQTT, so it stops before MQTT does.
+    builder.Services.AddHostedService(s => s.GetRequiredService<CommandOutbox>());
 
     //Start the Matter bridge with the application (it does nothing when disabled in its configuration)...
     builder.Services.AddHostedService<MatterBackgroundService>();

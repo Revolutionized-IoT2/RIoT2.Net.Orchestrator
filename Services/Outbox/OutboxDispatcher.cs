@@ -12,11 +12,14 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
         Failed
     }
 
-    public readonly record struct DeliveryResult(DeliveryOutcome Outcome, string Detail = null)
+    /// <param name="Outcome">What happened.</param>
+    /// <param name="Detail">The error of a retry or a failure, for the log and <c>last_error</c>.</param>
+    /// <param name="Result">What the receiver answered, stored in the row's <c>result</c>, e.g. a command result status.</param>
+    public readonly record struct DeliveryResult(DeliveryOutcome Outcome, string Detail = null, string Result = null)
     {
-        public static DeliveryResult Delivered(string result = null) => new(DeliveryOutcome.Delivered, result);
+        public static DeliveryResult Delivered(string result = null) => new(DeliveryOutcome.Delivered, Result: result);
         public static DeliveryResult Retry(string error) => new(DeliveryOutcome.Retry, error);
-        public static DeliveryResult Failed(string error) => new(DeliveryOutcome.Failed, error);
+        public static DeliveryResult Failed(string error, string result = null) => new(DeliveryOutcome.Failed, error, result);
     }
 
     /// <summary>
@@ -172,13 +175,13 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
             switch (result.Outcome)
             {
                 case DeliveryOutcome.Delivered:
-                    _store.Complete(message.Id, OutboxStatus.Done, now, result.Detail);
+                    _store.Complete(message.Id, OutboxStatus.Done, now, result.Result);
                     if (message.Attempts > 0)
                         _logger.LogInformation("{Description} {MessageId} for {Subject} delivered to {Target} after {Attempts} failed attempts",
                             Capitalize(_description), message.Id, message.Subject, _target, message.Attempts);
                     break;
                 case DeliveryOutcome.Failed:
-                    _store.Complete(message.Id, OutboxStatus.Failed, now, error: result.Detail);
+                    _store.Complete(message.Id, OutboxStatus.Failed, now, result.Result, result.Detail);
                     _logger.LogError("{Description} {MessageId} for {Subject} was rejected by {Target} and is not retried: {Error}",
                         Capitalize(_description), message.Id, message.Subject, _target, result.Detail);
                     break;

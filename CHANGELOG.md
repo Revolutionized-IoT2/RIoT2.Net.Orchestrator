@@ -5,6 +5,30 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-14
+
+Command results and API v2 ([I15](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i15-command-results-and-api-v2-m),
+[design 7.1](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/reliable-delivery.md) phase 2). Built on `RIoT2.Core` 1.7.0. Update before
+RIoT2.UI 1.2.0, which uses the new `/api/v2` routes; nodes can be updated in either order.
+
+- Changed: every command goes through the outbox (`CommandOutbox`, one dispatcher per node), from
+  `POST /api/command/execute`, Elsa and the Matter bridge alike. It waits while its node is offline
+  and expires after `RIOT2_OUTBOX_COMMAND_TTL` (new, default 30 s); before, it was published once
+  and lost if the node was offline. `POST /api/command/execute` still returns 200 once queued.
+- Added: command results. Commands carry a `correlationId`; a node that advertises
+  `command-result/1` (Node 1.4.0) must answer on `riot2/node/{id}/command/result` within five seconds,
+  or the command is sent again with the same id. `executed` and `duplicate` (executed before, its
+  answer lost) set the command state, `failed` and `unknownCommand` are final, `rejected` is retried. Other nodes are sent each
+  command once (`sent`), as before.
+- Added: `POST /api/v2/commands` (`{ id, value, ttlSeconds?, wait? }`, 202 or with `wait` 200 and
+  the final status) and `GET /api/v2/commands/{correlationId}`.
+- Added (backlog item 7): `DELETE /api/v2/nodes/{id}`, `DELETE /api/v2/variables/{id}`,
+  `DELETE /api/v2/reports/history`, `POST /api/v2/matter/commissioning/open`,
+  `POST /api/v2/matter/devices/refresh` and `POST /api/v2/matter/reset`. The old state-changing
+  `GET` routes still work; they are deprecated, answer with a `Deprecation` header and log their
+  first use.
+- Changed: the outbox health check and summary include commands (`kind` `command`, `target` the node id).
+
 ## [1.3.1] - 2026-10-14
 
 Image for the compose install ([I12](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-0-1.md#i12-one-command-install-s)). No code, port, user or variable changes.

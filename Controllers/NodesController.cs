@@ -100,6 +100,8 @@ namespace RIoT2.Net.Orchestrator.Controllers
         }
 
         [HttpGet("{id}/delete")]
+        [HttpDelete("/api/v2/nodes/{id}")]
+        [DeprecatedGetAlias("DELETE /api/v2/nodes/{id}")]
         public IActionResult DeleteNode(string id)
         {
             _configuration.DeleteNodeConfiguration(id);
@@ -364,6 +366,8 @@ namespace RIoT2.Net.Orchestrator.Controllers
         }
 
         [HttpGet("variable/{id}/delete")]
+        [HttpDelete("/api/v2/variables/{id}")]
+        [DeprecatedGetAlias("DELETE /api/v2/variables/{id}")]
         public IActionResult DeleteVariable(string id)
         {
             _storedObjectService.Delete<Variable>(id);

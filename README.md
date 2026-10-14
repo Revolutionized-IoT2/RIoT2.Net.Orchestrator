@@ -21,8 +21,9 @@ How the orchestrator fits into the platform:
 | `Controllers/` | REST API controllers for nodes, templates, state, dashboard, variables, commands, reports, Matter and the outbox |
 | `Services/OrchestratorOptions.cs` | The `RIOT2_*` settings, read and validated at startup |
 | `Services/OrchestratorConfigurationService.cs` | Settings, stored configuration and template lookup |
-| `Services/OrchestratorMqttService.cs` | MQTT report/command routing and state updates; reports go on to the automation provider |
+| `Services/OrchestratorMqttService.cs` | MQTT report/command routing and state updates; reports go on to the automation provider, commands to the command outbox |
 | `Services/Automation/` | `IAutomationProvider` and its only implementation, `ElsaAutomationProvider` (ADR 0008) |
+| `Services/Commands/` | `CommandOutbox`: commands through the outbox, one dispatcher per node, and their results (design 7.1) |
 | `Services/Outbox/` | The durable outbox: SQLite store, dispatcher, health check (design 7.1) |
 | `Services/Persistence/FileObjectStore.cs` | File-backed JSON storage under `StoredObjects/` |
 | `Services/Matter/` | Matter Control Bridge configuration, commissioning and endpoint bridging |
@@ -47,6 +48,7 @@ invalid setting, for example `Invalid orchestrator configuration: {problem}; {pr
 | `RIOT2_MQTT_USERNAME` | No | MQTT username; leave empty for an anonymous broker |
 | `RIOT2_MQTT_PASSWORD` | No | MQTT password |
 | `RIOT2_OUTBOX_WORKFLOW_TTL` | No | Seconds a workflow trigger waits for delivery before it expires; 1–86400, default 300 |
+| `RIOT2_OUTBOX_COMMAND_TTL` | No | Seconds a command waits for its node and its answer before it expires; 1–86400, default 30 |
 
 Hosting variables such as `ASPNETCORE_HTTP_PORTS`, `ASPNETCORE_URLS`, `ASPNETCORE_ENVIRONMENT` and
 `TZ` are described in the platform
@@ -95,9 +97,9 @@ a build changes it, and the UI tests check every URL the UI calls against it. Re
 [golden files](https://github.com/Revolutionized-IoT2/RIoT2.Core/blob/main/contracts/golden/README.md).
 The document isn't served at runtime.
 
-The orchestrator subscribes to node reports and node presence, publishes its retained online
-announcement, sends node configuration commands, publishes device commands, and publishes variable
-changes as reports under the orchestrator id. The topic and payload contract is
+The orchestrator subscribes to node reports, node presence and command results, publishes its
+retained online announcement, sends node configuration commands, publishes device commands, and
+publishes variable changes as reports under the orchestrator id. The topic and payload contract is
 [MQTT topics and payloads](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/mqtt-topics.md).
 
 Reports that match configured templates update state and history, are mirrored into Matter when a
@@ -120,6 +122,23 @@ Pending triggers survive a restart. Final rows are deleted after 24 hours.
 `GET /api/v2/outbox/summary` shows the messages per status, the oldest pending message and the last
 ten errors. `WorkflowTriggerClient` reuses one channel per workflow endpoint; each call's deadline
 is five seconds or the trigger's expiry, whichever comes first.
+
+Commands go through the same outbox (Orchestrator 1.4.0), from `POST /api/command/execute`,
+`POST /api/v2/commands`, Elsa and the Matter bridge. `CommandOutbox` runs one dispatcher per node,
+so a node's commands keep their order, and the outbox id is the command's `correlationId`:
+
+- Node offline: the command waits until the node announces itself, or until
+  `RIOT2_OUTBOX_COMMAND_TTL` (or the request's `ttlSeconds`) passes and it is marked `expired`.
+- Node with `command-result/1` (Node 1.4.0): it must answer on `riot2/node/{id}/command/result`
+  within five seconds, or the command is sent again with the same id, which the node runs only once.
+  `executed` sets the command state; `failed` and `unknownCommand` are final; `rejected` is retried.
+- Node without it (older nodes, firmware): the command is sent once, the state is set, and the
+  delivery is final as `sent`.
+
+`GET /api/v2/commands/{correlationId}` shows a delivery's status. The state-changing `GET` routes
+(`/api/nodes/{id}/delete`, `/api/nodes/variable/{id}/delete`, `/api/dashboard/reports/history/reset`
+and the three Matter actions) have `DELETE`/`POST` routes under `/api/v2`; the old routes still work,
+marked with `[DeprecatedGetAlias]`, which sends a `Deprecation` header and logs their first use.
 
 ## Docker
 
