@@ -24,6 +24,7 @@ namespace RIoT2.Net.Orchestrator.Services
         private string _reportTopic;
         private string _nodeOnlineTopic;
         private string _commandResultTopic;
+        private string _nodeStatusTopic;
 
         // Bounded queue decouples MQTT callback threads / event handlers from processing.
         private readonly Channel<Func<Task>> _workQueue;
@@ -47,6 +48,7 @@ namespace RIoT2.Net.Orchestrator.Services
             _reportTopic = Constants.Get("+", MqttTopic.Report); // Orchestrator is listening all reports...
             _nodeOnlineTopic = Constants.Get("+", MqttTopic.NodeOnline); // Orchestrator is listening all nodes...
             _commandResultTopic = Constants.Get("+", MqttTopic.CommandResult); // ...and every node's command results (design 7.1)
+            _nodeStatusTopic = Constants.Get("+", MqttTopic.NodeStatus); // ...and configuration statuses (design 7.2)
 
             _client = mqttClient ?? new MqttClient(_configuration.OrchestratorConfiguration.Mqtt, logger);
 
@@ -128,6 +130,9 @@ namespace RIoT2.Net.Orchestrator.Services
                     Enqueue(_matterSink.OnConfigurationChangedAsync);
                 if (id != null)
                     Enqueue(() => SendConfigurationCommand(id));
+                // A deleted node's retained status would describe a configuration that no longer exists.
+                if (changeType == OperationType.Deleted && obj is string deleted && !String.IsNullOrEmpty(deleted))
+                    Enqueue(() => ClearNodeStatusAsync(deleted));
             }
         }
 
@@ -165,7 +170,13 @@ namespace RIoT2.Net.Orchestrator.Services
         public async Task SendConfigurationCommand(string id)
         {
             var configurationCommandTopic = Constants.Get(id, MqttTopic.Configuration);
-            await _client.PublishAsync(configurationCommandTopic, Json.SerializeIgnoreNulls(generateConfigurationCommand(id)));
+            await _client.PublishAsync(configurationCommandTopic, Json.SerializeIgnoreNulls(CreateConfigurationCommand(id)));
+        }
+
+        private async Task ClearNodeStatusAsync(string id)
+        {
+            _onlineNodeService.SetStatus(id, null);
+            await _client.PublishAsync(Constants.Get(id, MqttTopic.NodeStatus), "", retain: true);
         }
 
         public bool IsConnected => _client?.IsConnected() == true;
@@ -190,7 +201,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 _client.ConnectedAsync += sendOrchestratorOnlineCommand;
                 // Replace the retained presence if the orchestrator stops or its connection drops.
                 _client.SetLastWill(Constants.Get("", MqttTopic.OrchestratorOnline), "{\"isOnline\":false}", true);
-                await _client.Start(_reportTopic, _nodeOnlineTopic, _commandResultTopic);
+                await _client.Start(_reportTopic, _nodeOnlineTopic, _commandResultTopic, _nodeStatusTopic);
             }
             catch (Exception x)
             {
@@ -263,6 +274,8 @@ namespace RIoT2.Net.Orchestrator.Services
             else if (MqttClient.IsMatch(mqttEventArgs.Topic, _nodeOnlineTopic))
             {
                 // An empty payload clears a retained message; anything else unreadable is a fault on the sender.
+                if (string.IsNullOrWhiteSpace(mqttEventArgs.Message))
+                    return;
                 var onlineMessage = ReadOnlineMessage(mqttEventArgs.Message);
                 if (onlineMessage == null)
                 {
@@ -285,8 +298,35 @@ namespace RIoT2.Net.Orchestrator.Services
                 _automation.NodeOnlineChanged(clientId, onlineMessage);
                 _commands.NodeOnlineChanged(clientId, onlineMessage);
                 _matterSink?.OnNodeOnlineChanged(clientId, onlineMessage.IsOnline);
+                // Sent on every presence, even when the node's retained status says it runs this configuration:
+                // that status may be older than the node. A desired-state node answers an applied hash
+                // without fetching or restarting anything (design 7.2).
                 if (onlineMessage.IsOnline)
                     await SendConfigurationCommand(clientId);
+            }
+            else if (MqttClient.IsMatch(mqttEventArgs.Topic, _nodeStatusTopic))
+            {
+                var nodeId = Constants.GetTopicId(mqttEventArgs.Topic, MqttTopic.NodeStatus);
+                if (string.IsNullOrWhiteSpace(mqttEventArgs.Message))
+                {
+                    _onlineNodeService.SetStatus(nodeId, null);
+                    return;
+                }
+                var status = NodeStatusMessage.Create(mqttEventArgs.Message);
+                if (status == null)
+                {
+                    _logger.LogWarning("Ignored an unreadable node status on {Topic}: {Payload}",
+                        mqttEventArgs.Topic, Truncate(mqttEventArgs.Message, 200));
+                    return;
+                }
+                var previous = _onlineNodeService.GetStatus(nodeId);
+                _onlineNodeService.SetStatus(nodeId, status);
+                if (status.State == NodeConfigurationState.Failed && (previous?.State != status.State || previous?.Error != status.Error))
+                    _logger.LogWarning("Node {NodeId} could not apply its configuration and runs revision {Revision}: {Error}",
+                        nodeId, status.AppliedRevision?.ToString() ?? "none", status.Error);
+                else if (status.FailedDevices?.Count > 0 && previous?.FailedDevices?.Count != status.FailedDevices.Count)
+                    _logger.LogWarning("Node {NodeId} applied revision {Revision}, but these devices are not running: {Devices}",
+                        nodeId, status.AppliedRevision?.ToString() ?? "none", string.Join(", ", status.FailedDevices.Select(d => $"{d.Id} ({d.Message})")));
             }
             else if (MqttClient.IsMatch(mqttEventArgs.Topic, _commandResultTopic))
             {
@@ -318,11 +358,15 @@ namespace RIoT2.Net.Orchestrator.Services
         private static string Truncate(string value, int length) =>
             value == null || value.Length <= length ? value : value[..length] + "...";
 
-        private ConfigurationCommand generateConfigurationCommand(string id) 
+        // Revision and hash let a desired-state node skip a configuration it already runs (design 7.2).
+        internal ConfigurationCommand CreateConfigurationCommand(string id)
         {
+            var desired = _configuration.NodeConfigurations.FirstOrDefault(x => x.Id == id);
             return new ConfigurationCommand()
             {
-                ApiBaseUrl = _configuration.OrchestratorConfiguration.Url
+                ApiBaseUrl = _configuration.OrchestratorConfiguration.Url,
+                Revision = desired?.Revision,
+                Hash = desired?.Hash
             };
         }
 

@@ -10,6 +10,8 @@ namespace RIoT2.Net.Orchestrator.Services
     public class OnlineNodeService : IOnlineNodeService
     {
         private readonly ConcurrentDictionary<string, OnlineNode> _onlineNodes;
+        // Kept while a node is offline: the status is retained, and still describes the node.
+        private readonly ConcurrentDictionary<string, NodeStatusMessage> _statuses = new();
         private readonly IOrchestratorConfigurationService _configuration;
         private ILogger<OnlineNodeService> _logger;
 
@@ -39,12 +41,37 @@ namespace RIoT2.Net.Orchestrator.Services
             _onlineNodes.TryRemove(id, out _);
         }
 
+        public void SetStatus(string id, NodeStatusMessage status)
+        {
+            if (status == null)
+                _statuses.TryRemove(id, out _);
+            else
+                _statuses[id] = status;
+        }
+
+        public NodeStatusMessage GetStatus(string id) => _statuses.TryGetValue(id, out var status) ? status : null;
+
+        internal static string SyncState(NodeDeviceConfiguration configuration, OnlineNode online, NodeStatusMessage status)
+        {
+            var settings = online?.OnlineNodeSettings;
+            if (settings != null && !settings.HasCapability(Contract.Capabilities.DesiredState))
+                return NodeSyncState.Legacy;
+            if (status == null)
+                return NodeSyncState.Pending;
+            if (status.State == NodeConfigurationState.Failed)
+                return NodeSyncState.Failed;
+            return status.State == NodeConfigurationState.Applied && status.AppliedHash != null && status.AppliedHash == configuration.Hash
+                ? NodeSyncState.InSync
+                : NodeSyncState.Pending;
+        }
+
         public async Task<List<Node>> GetNodesAsync()
         {
             // Issue all per-node status requests concurrently, then aggregate.
             var tasks = _configuration.NodeConfigurations.Select(async conf =>
             {
                 _onlineNodes.TryGetValue(conf.Id, out var onlineNode);
+                var status = GetStatus(conf.Id);
                 var deviceStatuses = await LoadDeviceStatusFromNodeAsync(conf.Id);
 
                 return new Node()
@@ -54,7 +81,11 @@ namespace RIoT2.Net.Orchestrator.Services
                     IsOnline = onlineNode?.OnlineNodeSettings?.IsOnline == true,
                     DeviceStatuses = deviceStatuses,
                     Manifest = onlineNode?.OnlineNodeSettings.Manifest,
-                    PluginManifest = onlineNode?.OnlineNodeSettings.PluginManifest
+                    PluginManifest = onlineNode?.OnlineNodeSettings.PluginManifest,
+                    DesiredRevision = conf.Revision,
+                    AppliedRevision = status?.AppliedRevision,
+                    SyncState = SyncState(conf, onlineNode, status),
+                    LastError = status?.Error
                 };
             });
 

@@ -97,9 +97,11 @@ a build changes it, and the UI tests check every URL the UI calls against it. Re
 [golden files](https://github.com/Revolutionized-IoT2/RIoT2.Core/blob/main/contracts/golden/README.md).
 The document isn't served at runtime.
 
-The orchestrator subscribes to node reports, node presence and command results, publishes its
-retained online announcement, sends node configuration commands, publishes device commands, and
-publishes variable changes as reports under the orchestrator id. The topic and payload contract is
+The orchestrator subscribes to node reports, node presence, command results and node
+configuration statuses, publishes its retained online announcement, sends node configuration
+commands (with the configuration's revision and hash), publishes device commands, and publishes
+variable changes as reports under the orchestrator id. `GET /api/nodes` reports each node's sync
+state from its status ([desired state](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/configuration.md#desired-state)). The topic and payload contract is
 [MQTT topics and payloads](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/mqtt-topics.md).
 
 Reports that match configured templates update state and history, are mirrored into Matter when a

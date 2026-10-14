@@ -25,6 +25,24 @@ namespace RIoT2.Net.Orchestrator.Services
                 Mqtt = options.Value.Mqtt.ToConfiguration(options.Value.Id)
             };
             readNodesConfigurations();
+            _storedObjectService.StoredObjectEvent += OnStoredObject;
+        }
+
+        // The store raises its event before Save returns. This handler is subscribed before every service
+        // that uses this one (they are constructed later), so a configuration command sent for a save
+        // already sees the saved revision and hash.
+        private void OnStoredObject(Type type, dynamic obj, RIoT2.Core.OperationType changeType)
+        {
+            if (type != typeof(NodeDeviceConfiguration))
+                return;
+            try
+            {
+                _nodes = _storedObjectService.GetAll<NodeDeviceConfiguration>().ToList();
+            }
+            catch (Exception x)
+            {
+                _logger.LogError(x, "Could not refresh the node configurations after a change");
+            }
         }
         public OrchestratorConfiguration OrchestratorConfiguration { get { return _configuration; } }
         public List<NodeDeviceConfiguration> NodeConfigurations { get { return _nodes; } }
@@ -95,6 +113,12 @@ namespace RIoT2.Net.Orchestrator.Services
             try
             {
                 _nodes = _storedObjectService.GetAll<NodeDeviceConfiguration>().ToList();
+                // Configurations saved before 1.5.0 have no revision; the hash always matches what is served.
+                foreach (var node in _nodes)
+                {
+                    node.Hash = ConfigurationHash.Stamp(node);
+                    node.Revision ??= 1;
+                }
                 _dashboardConfiguration = _storedObjectService.GetAll<DashboardConfiguration>().FirstOrDefault();
 
                 //Create default dashboard if there is nothing stored
@@ -189,6 +213,14 @@ namespace RIoT2.Net.Orchestrator.Services
                     }
                 }
             }
+
+            // Revision and hash (design 7.2): the revision counts content changes, so saving the same
+            // content again keeps it. Whatever the caller sent in these fields is replaced.
+            var previous = _nodes.FirstOrDefault(x => x.Id == configuration.Id);
+            configuration.Hash = ConfigurationHash.Stamp(configuration);
+            configuration.Revision = previous == null ? 1
+                : previous.Hash == configuration.Hash ? previous.Revision ?? 1
+                : (previous.Revision ?? 0) + 1;
 
             var id = _storedObjectService.Save(configuration, true, false, true);
             if (string.IsNullOrEmpty(id))

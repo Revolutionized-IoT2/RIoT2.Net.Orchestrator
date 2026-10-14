@@ -9,6 +9,10 @@ namespace RIoT2.Net.Orchestrator.Services
         void Remove(string id);
         IEnumerable<OnlineNode> OnlineNodes { get; }
 
+        /// <summary>Records the configuration status a node published (design 7.2); <c>null</c> forgets it.</summary>
+        void SetStatus(string id, NodeStatusMessage status);
+        NodeStatusMessage GetStatus(string id);
+
         Task<List<Node>> GetNodesAsync();
         Task<List<DeviceStatus>> LoadDeviceStatusFromNodeAsync(string nodeId);
         Task<List<DeviceConfiguration>> LoadDeviceConfigurationTemplateAsync(string id);

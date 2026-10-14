@@ -92,11 +92,20 @@ namespace RIoT2.Net.Orchestrator.Controllers
             if (configuration == null)
                 return NotFound($"Could not find node configuration with ID: {id}");
 
+            // The states go into a copy: the stored configuration is what nodes fetch and what its hash covers.
             if (includesState)
-                appendCurrentStates(ref configuration);
+                return Content(Json.Serialize(WithCurrentStates(configuration)), "application/json");
 
+            // Design 7.2: the ETag is the configuration hash, and a node that runs it gets 304.
+            if (!String.IsNullOrEmpty(configuration.Hash))
+            {
+                var etag = new Microsoft.Net.Http.Headers.EntityTagHeaderValue($"\"{configuration.Hash}\"");
+                Response.Headers.ETag = etag.ToString();
+                if (Microsoft.Net.Http.Headers.EntityTagHeaderValue.TryParseList(Request.Headers.IfNoneMatch, out var requested)
+                    && requested.Any(tag => tag.Compare(etag, useStrongComparison: false) || tag.Equals(Microsoft.Net.Http.Headers.EntityTagHeaderValue.Any)))
+                    return StatusCode(StatusCodes.Status304NotModified);
+            }
             return Content(Json.Serialize(configuration), "application/json");
-           //return new OkObjectResult(configuration);
         }
 
         [HttpGet("{id}/delete")]
@@ -375,20 +384,19 @@ namespace RIoT2.Net.Orchestrator.Controllers
         }
 
 
-        private void appendCurrentStates(ref NodeDeviceConfiguration configuration) 
+        private NodeDeviceConfiguration WithCurrentStates(NodeDeviceConfiguration configuration)
         {
-            foreach(var node in _configuration.NodeConfigurations) 
+            var copy = Json.Deserialize<NodeDeviceConfiguration>(Json.Serialize(configuration));
+            foreach (var device in copy.DeviceConfigurations ?? [])
             {
-                foreach (var device in node.DeviceConfigurations) 
+                foreach (var commandTemplate in device.CommandTemplates ?? [])
                 {
-                    foreach (var commandTemplate in device.CommandTemplates ?? []) 
-                    {
-                        var latestCommand = _messageStateService.Commands.FirstOrDefault(x => x.Id == commandTemplate.Id);
-                        if (latestCommand != null)
-                            commandTemplate.Model = latestCommand.Value;
-                    }
+                    var latestCommand = _messageStateService.Commands.FirstOrDefault(x => x.Id == commandTemplate.Id);
+                    if (latestCommand != null)
+                        commandTemplate.Model = latestCommand.Value;
                 }
             }
+            return copy;
         }
     }
 }

@@ -135,8 +135,8 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   a new id.
 - Every device command goes through `ICommandOutbox` (`OrchestratorMqttService.ExecuteCommand`
   enqueues). Its outbox id is its `correlationId`; a redelivery must repeat it, because nodes run an
-  id only once. Set the command state only on `executed` (or on `sent` to a node without
-  `command-result/1`).
+  id only once. Set the command state only on `executed` or `duplicate` (or on `sent` to a node
+  without `command-result/1`).
 - The outbox SQL is plain `Microsoft.Data.Sqlite`; no EF Core. A schema change raises
   `PRAGMA user_version` in `OutboxStore` and must open an existing `outbox.db`.
 - Preserve the `json-naming-policy` header profiles until M2 removes them through a compatibility
@@ -179,8 +179,8 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
 - `OrchestratorMqttService` publishes retained `{"isOnline":true}` on `riot2/orchestrator/online`
   on every connect. Its last will (set with `MqttClient.SetLastWill` before `Start`) and its
   graceful stop replace it with retained `{"isOnline":false}`.
-- .NET MQTT presence messages and last wills are not retained, while firmware presence is
-  retained (divergence D1).
+- Node configurations carry a `revision` and `hash` (design 7.2), stamped on save and load; never
+  serve or hash a configuration you changed in place (`?state=true` works on a copy).
 - `Json.Serialize` camel-cases dictionary keys. Configuration `deviceParameters` should use
   camelCase keys because device lookups are case-sensitive.
 - `Data/Manifest.json` is written into the image at build time. Don't make `/app/Data` a volume:
@@ -197,8 +197,6 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   [18](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md).
 - Maintainer action
   [MA2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/README.md#ma2-cut-a-core-release-and-align-all-consumers).
-- Contract divergences
-  [D1](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/README.md#contract-divergences).
 - Plans
   [M2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/plans/m02-system-text-json-persistence.md),
   [M3](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/plans/m03-split-oversized-classes.md),

@@ -5,6 +5,26 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-14
+
+Desired-state configuration ([I16](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i16-desired-state-configuration-for-net-nodes-m),
+[design 7.2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/desired-state-configuration.md) phases 2–3). Built on `RIoT2.Core` 1.8.0. No port, user, volume or
+variable changes; update in any order with the nodes.
+
+- Added: every node configuration has a `revision` (counts content changes) and a `hash`, also on
+  each device entry. Configurations saved before get revision 1. `GET /api/nodes/{id}/configuration`
+  sends the hash as `ETag` and answers `If-None-Match` with `304`, and configuration commands carry
+  `revision` and `hash`, so a Node 1.5.0 skips a configuration it already runs.
+- Added: the orchestrator subscribes to `riot2/node/+/status`. `GET /api/nodes` reports
+  `desiredRevision`, `appliedRevision`, `syncState` (`inSync`, `pending`, `failed`, `legacy`) and
+  `lastError`; a failed configuration is logged. Deleting a node clears its retained status.
+- Fixed: `GET /api/nodes/{id}/configuration?state=true` wrote the last command values into every
+  stored node configuration, so nodes downloaded them and could restart devices. It now returns a
+  copy.
+- Fixed: a configuration command sent right after a save could carry the configuration from before
+  the save.
+- Changed: an empty presence payload (a cleared retained message) is ignored without a warning.
+
 ## [1.4.0] - 2026-10-14
 
 Command results and API v2 ([I15](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i15-command-results-and-api-v2-m),
