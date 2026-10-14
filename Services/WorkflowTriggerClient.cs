@@ -11,9 +11,12 @@ internal sealed class WorkflowTriggerClient : IAsyncDisposable
     private Uri _address;
     private bool _disposed;
 
-    public async Task<TriggerResponse> TriggerAsync(string address, TriggerRequest request, CancellationToken cancellationToken)
+    public async Task<TriggerResponse> TriggerAsync(string address, TriggerRequest request, CancellationToken cancellationToken, DateTime? deadline = null)
     {
         var uri = new Uri(address, UriKind.Absolute);
+        var callDeadline = DateTime.UtcNow.AddSeconds(5);
+        if (deadline < callDeadline)
+            callDeadline = deadline.Value;
         await _gate.WaitAsync(cancellationToken);
         try
         {
@@ -27,7 +30,7 @@ internal sealed class WorkflowTriggerClient : IAsyncDisposable
                 _address = uri;
             }
             return await _client.TriggerAsync(request,
-                deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: cancellationToken);
+                deadline: callDeadline, cancellationToken: cancellationToken);
         }
         finally
         {

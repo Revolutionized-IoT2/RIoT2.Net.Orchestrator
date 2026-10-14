@@ -15,6 +15,10 @@ message TriggerRequest {
   string id = 1;
   // JSON-encoded event payload (equivalent to the HTTP request body).
   string data = 2;
+  // Idempotency key set by the orchestrator's outbox; a redelivery carries the same id. A trigger
+  // whose id was seen in the last ten minutes is answered with success and not run again. Empty
+  // from older senders: then every request runs.
+  string message_id = 3;
 }
 
 message TriggerResponse {

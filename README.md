@@ -2,7 +2,8 @@
 
 Central ASP.NET Core service for the [RIoT2](https://github.com/Revolutionized-IoT2) IoT
 platform. It stores the user's node, dashboard, variable and Matter bridge configuration, tracks
-online nodes, routes MQTT reports and commands, and forwards accepted reports to Elsa 3 over gRPC.
+online nodes, routes MQTT reports and commands, and delivers accepted reports to Elsa 3 over gRPC
+through a durable outbox.
 
 - Type: ASP.NET Core Web API / hub service
 - Target framework: .NET 10
@@ -17,10 +18,12 @@ How the orchestrator fits into the platform:
 | Path | Contents |
 | --- | --- |
 | `Program.cs` | Host setup, logging, CORS, JSON profiles, health checks and DI registration |
-| `Controllers/` | REST API controllers for nodes, templates, state, dashboard, variables, commands, reports and Matter |
+| `Controllers/` | REST API controllers for nodes, templates, state, dashboard, variables, commands, reports, Matter and the outbox |
 | `Services/OrchestratorOptions.cs` | The `RIOT2_*` settings, read and validated at startup |
 | `Services/OrchestratorConfigurationService.cs` | Settings, stored configuration and template lookup |
-| `Services/OrchestratorMqttService.cs` | MQTT report/command routing, state updates and workflow forwarding |
+| `Services/OrchestratorMqttService.cs` | MQTT report/command routing and state updates; reports go on to the automation provider |
+| `Services/Automation/` | `IAutomationProvider` and its only implementation, `ElsaAutomationProvider` (ADR 0008) |
+| `Services/Outbox/` | The durable outbox: SQLite store, dispatcher, health check (design 7.1) |
 | `Services/Persistence/FileObjectStore.cs` | File-backed JSON storage under `StoredObjects/` |
 | `Services/Matter/` | Matter Control Bridge configuration, commissioning and endpoint bridging |
 | `CustomJsonSettings/` | Controller JSON settings (`OrchestratorJsonOptions`) and the optional `json-naming-policy` formatter profiles |
@@ -43,6 +46,7 @@ invalid setting, for example `Invalid orchestrator configuration: {problem}; {pr
 | `RIOT2_MQTT_PORT` | No | MQTT broker port; default 1883 |
 | `RIOT2_MQTT_USERNAME` | No | MQTT username; leave empty for an anonymous broker |
 | `RIOT2_MQTT_PASSWORD` | No | MQTT password |
+| `RIOT2_OUTBOX_WORKFLOW_TTL` | No | Seconds a workflow trigger waits for delivery before it expires; 1–86400, default 300 |
 
 Hosting variables such as `ASPNETCORE_HTTP_PORTS`, `ASPNETCORE_URLS`, `ASPNETCORE_ENVIRONMENT` and
 `TZ` are described in the platform
@@ -66,7 +70,8 @@ Do not copy values from `Properties/launchSettings.json`, `StoredObjects/`, `Log
 ## Storage and Matter
 
 `FileObjectStore` stores JSON as `StoredObjects/<TypeName>/<id>.json` under the application content
-root. It validates type names and ids before using them as file names. The stored node
+root. The outbox is `StoredObjects/outbox.db` (SQLite, with `-wal` and `-shm` files while it runs);
+include it in full-system backups, not in configuration backups. It validates type names and ids before using them as file names. The stored node
 configuration schema, variable behavior and persistence layout are documented in the platform
 [configuration contract](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/configuration.md).
 
@@ -96,10 +101,25 @@ changes as reports under the orchestrator id. The topic and payload contract is
 [MQTT topics and payloads](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/mqtt-topics.md).
 
 Reports that match configured templates update state and history, are mirrored into Matter when a
-Matter endpoint is bound to the template, and are forwarded to the online Elsa workflow node over
-gRPC. `WorkflowTriggerClient` reuses one channel per workflow endpoint and uses a five-second
-deadline. Delivery is in-memory and not retried automatically; durable delivery is planned in
-[design 7.1](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/reliable-delivery.md).
+Matter endpoint is bound to the template, and become workflow triggers
+([design 7.1](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/reliable-delivery.md)).
+`OrchestratorMqttService` hands each report to `IAutomationProvider`; `ElsaAutomationProvider`
+stores it as a trigger in the outbox before the next message is handled. A dispatcher delivers the
+triggers in order over gRPC to the online Elsa workflow node, with the outbox id as `message_id`,
+which Elsa deduplicates on:
+
+- No workflow node online: the triggers wait, and are delivered when Elsa announces itself.
+- Transient failure (unreachable, timeout after five seconds, any gRPC error except
+  `InvalidArgument`): retried after 1 s, 2 s, 4 s … at most 30 s; later triggers wait behind it.
+- Rejected (`success=false` or `InvalidArgument`): marked `failed`, logged as an error and not
+  retried.
+- Older than `RIOT2_OUTBOX_WORKFLOW_TTL`: marked `expired` and never delivered; expiries are logged
+  as one warning a minute at most.
+
+Pending triggers survive a restart. Final rows are deleted after 24 hours.
+`GET /api/v2/outbox/summary` shows the messages per status, the oldest pending message and the last
+ten errors. `WorkflowTriggerClient` reuses one channel per workflow endpoint; each call's deadline
+is five seconds or the trigger's expiry, whichever comes first.
 
 ## Docker
 
@@ -127,8 +147,9 @@ docker run --rm -p 8080:8080 `
   riot2-orchestrator
 ```
 
-Use `/health` for container or orchestrator health checks. It is healthy only while the MQTT client
-is connected to the broker. For persistent deployments, bind-mount writable directories for
+Use `/health` for container or orchestrator health checks. It is `Unhealthy` while the MQTT client
+is disconnected from the broker, and `Degraded` (still HTTP 200) when more than 500 workflow
+triggers are pending or one is older than half its time-to-live. For persistent deployments, bind-mount writable directories for
 `/app/StoredObjects`, `/app/Logs` and `/app/MatterCredentials`; Matter commissioning usually also
 needs host networking for mDNS and IPv6.
 
@@ -156,7 +177,7 @@ next to this one. Its [end-to-end tests](https://github.com/Revolutionized-IoT2/
 - To release, push a tag `x.y.z`. The release workflow validates, then pushes
   `ghcr.io/revolutionized-iot2/riot2-orchestrator:latest` and `:<tag>`. Every push runs CI
   ([CI guide](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/guides/ci.md)).
-- The project references the published packages `RIoT2.Core` `1.1.0`, `RIoT2.Matter` `1.0.0`
+- The project references the published packages `RIoT2.Core` `1.5.0`, `RIoT2.Matter` `1.0.0`
   and `RIoT2.Matter.ControlBridge` `1.0.0`. To try unreleased versions, restore with
   `C:\Src\RIoT2\.localfeed` as an extra source.
 

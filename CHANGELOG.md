@@ -5,6 +5,35 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-14
+
+Durable workflow delivery ([I11](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-0-1.md#i11-durable-workflow-delivery-m),
+[design 7.1](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/reliable-delivery.md) phase 1).
+Built on `RIoT2.Core` 1.5.0. Upgrade RIoT2.Elsa to 1.3.0 first, so that redelivered triggers are
+deduplicated; an older Elsa works too, but may run a redelivered trigger twice.
+
+- Changed: workflow triggers go through a durable outbox, `StoredObjects/outbox.db` (SQLite) on the
+  existing volume. A trigger is no longer dropped when Elsa is slow, restarting or not yet online,
+  or when the orchestrator restarts. It is retried with backoff (1 s, 2 s, 4 s … at most 30 s), in
+  order, and expires after its time-to-live. Before, a failed delivery was logged and dropped, a
+  report was dropped while no workflow node was online, and queued deliveries were discarded on
+  shutdown.
+- Changed: a delivery attempt's gRPC deadline is five seconds or the trigger's expiry, whichever
+  comes first, so a trigger never reaches Elsa after its time-to-live.
+- Added `RIOT2_OUTBOX_WORKFLOW_TTL`, the trigger time-to-live in seconds (1–86400, default 300).
+- Added `GET /api/v2/outbox/summary`: messages per status, the oldest pending message and the last
+  ten errors.
+- Changed: `/health` reports `Degraded` when more than 500 triggers are pending or one is older than
+  half its time-to-live (new `outbox` check).
+- Changed: each trigger carries its outbox id in the new gRPC field `TriggerRequest.message_id`
+  (wire-compatible), which RIoT2.Elsa 1.3.0 deduplicates on.
+- Changed: the orchestrator reports domain events to an `IAutomationProvider` (ADR 0008).
+  `ElsaAutomationProvider` is the only implementation; `OrchestratorMqttService` no longer calls the
+  gRPC client.
+- Removed the volatile workflow queue and its log messages "Workflow delivery queue is full",
+  "Could not process report … because no workflow node is online" and "Discarded … pending
+  workflow deliveries during shutdown".
+
 ## [1.2.0] - 2026-10-13
 
 MQTT client robustness ([I08](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-0-1.md#i08-mqtt-client-robustness-m)). Built on `RIoT2.Core` 1.3.0. No deployment change is needed.

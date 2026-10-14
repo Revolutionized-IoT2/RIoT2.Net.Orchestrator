@@ -10,7 +10,8 @@ workspace map, platform-wide rules and the documentation rules. In the local wor
 
 An ASP.NET Core service targeting .NET 10. It is the hub of the RIoT2 platform: it stores node,
 dashboard, variable and Matter bridge configuration, tracks online nodes, routes MQTT reports and
-commands, and forwards accepted reports to Elsa 3 over gRPC. It publishes the Docker image
+commands, and delivers accepted reports to Elsa 3 over gRPC through a durable SQLite outbox. It
+publishes the Docker image
 `ghcr.io/revolutionized-iot2/riot2-orchestrator`.
 
 ## Commands
@@ -55,15 +56,17 @@ must keep them passing.
 | Path | Contents |
 |---|---|
 | `Program.cs` | ASP.NET Core host, Serilog, CORS, JSON profiles, DI, health checks and hosted services |
-| `Controllers/` | Anonymous REST controllers for nodes, templates, state, dashboard, variables, commands, reports and Matter |
+| `Controllers/` | Anonymous REST controllers for nodes, templates, state, dashboard, variables, commands, reports, Matter and the outbox (`api/v2/outbox`) |
 | `CustomJsonSettings/` | `OrchestratorJsonOptions` (controller JSON settings) and the `json-naming-policy: pascal\|lower` MVC formatter profiles |
 | `openapi/riot2-orchestrator.json` | Generated OpenAPI document (the REST route contract), committed |
 | `Services/OrchestratorOptions.cs` | Every `RIOT2_*` setting the orchestrator reads, validated at startup with Core's `SettingsReader` |
 | `Services/OrchestratorConfigurationService.cs` | Settings from `IOptions<OrchestratorOptions>`, stored node/dashboard configuration and template lookup |
-| `Services/OrchestratorMqttService.cs` | MQTT subscriptions/publications, state updates, Matter report mirroring and Elsa gRPC forwarding |
+| `Services/OrchestratorMqttService.cs` | MQTT subscriptions/publications, state updates, Matter report mirroring; reports and presence go to `IAutomationProvider` |
+| `Services/Automation/` | `IAutomationProvider` (ADR 0008) and `ElsaAutomationProvider`, which stores triggers in the outbox and runs their dispatcher as a hosted service |
+| `Services/Outbox/` | `OutboxStore` (`StoredObjects/outbox.db`, plain SQL over `Microsoft.Data.Sqlite`), `OutboxDispatcher` (FIFO per target, backoff, TTL, cleanup), `OutboxHealthCheck` |
 | `Services/Persistence/` | File-backed `StoredObjects/<Type>/<Id>.json` object store |
 | `Services/Matter/` | Matter Control Bridge configuration, endpoint composition, commissioning and report/command bridging |
-| `Services/WorkflowTriggerClient.cs` | Reused gRPC client/channel with a five-second workflow trigger deadline |
+| `Services/WorkflowTriggerClient.cs` | Reused gRPC client/channel with a five-second workflow trigger deadline; used only by `ElsaAutomationProvider` |
 | `Protos/riot_trigger.proto` | gRPC trigger contract, kept in lockstep with Elsa's `riot.proto` |
 | `Dockerfile` | .NET 10 multi-stage image; runtime is Alpine, non-root, HTTP port 8080 |
 | `.github/workflows/ci.yml`, `release.yml` | CI on every push; GHCR image release on a tag |
@@ -80,7 +83,8 @@ topic or environment-variable tables here.
   `Services/OrchestratorMqttService.cs`, `Services/MqttBackgroundService.cs` and
   `Services/MqttHealthCheck.cs`.
 - [env-vars.md](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/env-vars.md):
-  `Services/OrchestratorOptions.cs`, `Dockerfile` and `.github/workflows/release.yml`. A new
+  `Services/OrchestratorOptions.cs` (including `RIOT2_OUTBOX_WORKFLOW_TTL`), `Dockerfile` and
+  `.github/workflows/release.yml`. A new
   setting is added to `OrchestratorOptions` and to the contract; nothing else reads the
   environment.
 - [configuration.md](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/configuration.md):
@@ -89,7 +93,8 @@ topic or environment-variable tables here.
 
 The gRPC service/message schema in `Protos/riot_trigger.proto` must stay compatible with
 `RIoT2.Elsa/RIoT2.Elsa.Server/RIoT/Protos/riot.proto`; only the generated C# namespace differs
-today.
+today. Delivery follows [design 7.1](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/reliable-delivery.md)
+and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0006-reliable-delivery.md).
 
 ## Rules
 
@@ -107,7 +112,7 @@ today.
   `Json.SerializeIgnoreNulls` for wire payloads that use Core models.
 - Keep `RIoT2.Core`, `RIoT2.Matter` and `RIoT2.Matter.ControlBridge` as package references. The
   Dockerfile restores from GitHub Packages and cannot see project references.
-- Current package pins are `RIoT2.Core` `1.1.0`, `RIoT2.Matter` `1.0.0` and
+- Current package pins are `RIoT2.Core` `1.5.0`, `RIoT2.Matter` `1.0.0` and
   `RIoT2.Matter.ControlBridge` `1.0.0`, all published. Use `C:\Src\RIoT2\.localfeed` as an extra
   NuGet source only to try unreleased versions.
 - Keep `PackageReference` items versionless; package versions belong in `Directory.Packages.props`.
@@ -121,6 +126,12 @@ today.
   explicit deployment design changes it.
 - Elsa 3 is the only automation engine. Do not reintroduce the retired rule engine or the obsolete
   `RIOT2_USE_EXTERNAL_WORKFLOW_ENGINE` switch.
+- Reach automation only through `IAutomationProvider` (ADR 0008); nothing outside
+  `Services/Automation/` calls `WorkflowTriggerClient`. A trigger must be in the outbox before
+  `ReportReceivedAsync` returns, and its outbox id is its `message_id`: never send a redelivery with
+  a new id.
+- The outbox SQL is plain `Microsoft.Data.Sqlite`; no EF Core. A schema change raises
+  `PRAGMA user_version` in `OutboxStore` and must open an existing `outbox.db`.
 - Preserve the `json-naming-policy` header profiles until M2 removes them through a compatibility
   plan.
 - A route change must commit the regenerated `openapi/riot2-orchestrator.json`; CI
@@ -143,8 +154,17 @@ today.
   fixed 2026-10-12). Add any new runtime folder to both.
 - `Properties/launchSettings.json`, `StoredObjects/`, `Logs/` and `MatterCredentials/` can contain
   local values or secrets. Do not copy their contents into docs, images or examples.
-- Workflow delivery is volatile: reports are dropped if no workflow node is online, if the gRPC
-  call fails, or on shutdown. The in-memory workflow queue has capacity 1000 and no replay.
+- Workflow delivery is at-least-once: a trigger whose answer is lost is delivered again with the
+  same `message_id`. Elsa 1.3.0 deduplicates; an older Elsa runs it twice.
+- Delivery is FIFO per target, so a failing trigger holds up the ones behind it until it succeeds,
+  fails or expires (at most `RIOT2_OUTBOX_WORKFLOW_TTL`, default 300 s).
+- `ElsaAutomationProvider` is a singleton and, through a factory, a hosted service registered after
+  `MqttBackgroundService`. It stops first, and the reports MQTT drains while stopping are stored for
+  the next start. Keep that order.
+- Elsa sets no MQTT last will, so a crashed Elsa still looks online: triggers are retried until
+  they expire. Elsa's next announcement resets the backoff.
+- `outbox.db` is opened without connection pooling; the file is released when the store is
+  disposed. Unit tests create the store in a temporary directory.
 - `POST /api/command/execute` returns after the command is published and state is set. It does not
   prove the device executed the command.
 - `OrchestratorMqttService` publishes retained `{"isOnline":true}` on `riot2/orchestrator/online`

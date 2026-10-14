@@ -3,7 +3,7 @@ using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Utils;
 using RIoT2.Core;
 using RIoT2.Core.Models;
-using RIoT2.Net.Orchestrator.Grpc;
+using RIoT2.Net.Orchestrator.Services.Automation;
 using RIoT2.Net.Orchestrator.Services.Matter;
 
 namespace RIoT2.Net.Orchestrator.Services
@@ -15,6 +15,7 @@ namespace RIoT2.Net.Orchestrator.Services
         private readonly IMessageStateService _deviceStateService;
         private readonly IStoredObjectService _storedObjectService;
         private readonly IOnlineNodeService _onlineNodeService;
+        private readonly IAutomationProvider _automation;
         private readonly IMatterReportSink _matterSink;
         private readonly ILogger _logger;
 
@@ -23,22 +24,20 @@ namespace RIoT2.Net.Orchestrator.Services
 
         // Bounded queue decouples MQTT callback threads / event handlers from processing.
         private readonly Channel<Func<Task>> _workQueue;
-        private readonly Channel<Func<Task>> _workflowQueue;
         private readonly CancellationTokenSource _cts;
         private readonly Task _consumerTask;
-        private readonly Task _workflowTask;
-        private readonly WorkflowTriggerClient _workflowClient = new();
         private readonly object _stopGate = new();
         private Task _stopTask;
         private int _disposed;
 
-        public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IMessageStateService deviceStateService, IStoredObjectService storedObjectService, IOnlineNodeService onlineNodeService, ILogger<OrchestratorMqttService> logger, IMatterReportSink matterSink = null, MqttClient mqttClient = null)
+        public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IMessageStateService deviceStateService, IStoredObjectService storedObjectService, IOnlineNodeService onlineNodeService, IAutomationProvider automation, ILogger<OrchestratorMqttService> logger, IMatterReportSink matterSink = null, MqttClient mqttClient = null)
         {
             _logger = logger;
             _storedObjectService = storedObjectService;
             _configuration = configuration;
             _deviceStateService = deviceStateService;
             _onlineNodeService = onlineNodeService;
+            _automation = automation ?? throw new ArgumentNullException(nameof(automation));
             _matterSink = matterSink;
 
             _reportTopic = Constants.Get("+", MqttTopic.Report); // Orchestrator is listening all reports...
@@ -53,14 +52,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 SingleWriter = false
             });
             _cts = new CancellationTokenSource();
-            _workflowQueue = Channel.CreateBounded<Func<Task>>(new BoundedChannelOptions(1000)
-            {
-                FullMode = BoundedChannelFullMode.Wait,
-                SingleReader = true,
-                SingleWriter = false
-            });
             _consumerTask = ProcessQueueAsync(_workQueue.Reader, "MQTT", _cts.Token);
-            _workflowTask = ProcessQueueAsync(_workflowQueue.Reader, "workflow", _cts.Token);
 
             _storedObjectService.StoredObjectEvent += IStoredObjectService_StoredObjectEvent;
         }
@@ -146,17 +138,14 @@ namespace RIoT2.Net.Orchestrator.Services
             _storedObjectService.StoredObjectEvent -= IStoredObjectService_StoredObjectEvent;
             _cts.Cancel();
             _workQueue.Writer.TryComplete();
-            _workflowQueue.Writer.TryComplete();
             try
             {
-                await Task.WhenAll(_consumerTask, _workflowTask).WaitAsync(TimeSpan.FromSeconds(5));
+                await _consumerTask.WaitAsync(TimeSpan.FromSeconds(5));
             }
             catch (TimeoutException x)
             {
                 _logger.LogError(x, "MQTT processing did not stop within five seconds");
             }
-            LogAbandonedWork();
-            await _workflowClient.DisposeAsync();
             _client?.Dispose();
             _cts.Dispose();
         }
@@ -211,27 +200,13 @@ namespace RIoT2.Net.Orchestrator.Services
             _client.MessageReceivedAsync -= _client_MessageReceivedAsync;
             _client.ConnectedAsync -= sendOrchestratorOnlineCommand;
             _storedObjectService.StoredObjectEvent -= IStoredObjectService_StoredObjectEvent;
+            // Draining stores the remaining reports' workflow triggers in the outbox.
             _workQueue.Writer.TryComplete();
             await _consumerTask;
-            _workflowQueue.Writer.TryComplete();
-            // Do not spend up to 1000 delivery deadlines draining a volatile queue on shutdown.
-            _cts.Cancel();
-            await _workflowTask;
-            LogAbandonedWork();
-            await _workflowClient.DisposeAsync();
             await _client.Stop();
         }
 
-        private void LogAbandonedWork()
-        {
-            var count = 0;
-            while (_workflowQueue.Reader.TryRead(out _))
-                count++;
-            if (count > 0)
-                _logger.LogWarning("Discarded {Count} pending workflow deliveries during shutdown; no automatic replay", count);
-        }
-
-        // Only state processing can exert backpressure here; workflow delivery has its own bounded queue.
+        // Workflow triggers go to the durable outbox, so delivery to Elsa never holds up this queue.
         private async Task _client_MessageReceivedAsync(MqttEventArgs mqttEventArgs)
         {
             try
@@ -272,19 +247,8 @@ namespace RIoT2.Net.Orchestrator.Services
 
                 //TODO validate report against template!
 
-                var workflowNode = _onlineNodeService.OnlineNodes.FirstOrDefault(x => x.OnlineNodeSettings.IsOnline && x.OnlineNodeSettings.NodeType == NodeType.Workflow);
-                if (workflowNode != default)
-                {
-                    var settings = workflowNode.OnlineNodeSettings;
-                    var url = string.IsNullOrWhiteSpace(settings.GrpcBaseUrl) ? settings.NodeBaseUrl : settings.GrpcBaseUrl;
-                    var request = new TriggerRequest { Id = report.Id, Data = report.ToJson() };
-                    if (!_workflowQueue.Writer.TryWrite(() => DeliverWorkflowAsync(url, request, _cts.Token)))
-                        _logger.LogWarning("Workflow delivery queue is full or completed; report {ReportId} was not forwarded", report.Id);
-                }
-                else
-                {
-                    _logger.LogWarning("Could not process report {ReportId} because no workflow node is online", report.Id);
-                }
+                // Stored in the outbox and delivered when a workflow node is online (design 7.1).
+                await _automation.ReportReceivedAsync(report, _cts.Token);
             }
             else if (MqttClient.IsMatch(mqttEventArgs.Topic, _nodeOnlineTopic))
             {
@@ -308,6 +272,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 }
                 else
                     _onlineNodeService.Remove(clientId);
+                _automation.NodeOnlineChanged(clientId, onlineMessage);
                 _matterSink?.OnNodeOnlineChanged(clientId, onlineMessage.IsOnline);
                 if (onlineMessage.IsOnline)
                     await SendConfigurationCommand(clientId);
@@ -330,20 +295,6 @@ namespace RIoT2.Net.Orchestrator.Services
 
         private static string Truncate(string value, int length) =>
             value == null || value.Length <= length ? value : value[..length] + "...";
-
-        private async Task DeliverWorkflowAsync(string url, TriggerRequest request, CancellationToken cancellationToken)
-        {
-            try
-            {
-                var response = await _workflowClient.TriggerAsync(url, request, cancellationToken);
-                if (!response.Success)
-                    _logger.LogWarning("Workflow engine did not accept report {ReportId}", request.Id);
-            }
-            catch (Exception x)
-            {
-                _logger.LogError(x, "Workflow delivery failed for report {ReportId}; not retried automatically", request.Id);
-            }
-        }
 
         private ConfigurationCommand generateConfigurationCommand(string id) 
         {
