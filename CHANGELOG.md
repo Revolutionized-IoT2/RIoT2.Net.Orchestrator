@@ -7,7 +7,7 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [1.9.0] - 2026-11-01
 
-Orchestrator restructure ([I23](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i23-orchestrator-restructure-m), plan M3 steps 1?3).
+Orchestrator restructure ([I23](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i23-orchestrator-restructure-m), plan M3 steps 1–3).
 No route, port, user or volume changes: the OpenAPI document has the same paths, operations and
 schemas (only their order changed).
 
