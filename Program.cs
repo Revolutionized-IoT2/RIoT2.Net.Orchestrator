@@ -2,9 +2,11 @@ using Microsoft.Extensions.Options;
 using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Models;
 using RIoT2.Core.Services;
+using RIoT2.Net.Orchestrator.Controllers;
 using RIoT2.Net.Orchestrator.CustomJsonSettings;
 using RIoT2.Net.Orchestrator.Services;
 using RIoT2.Net.Orchestrator.Services.Automation;
+using RIoT2.Net.Orchestrator.Services.Backup;
 using RIoT2.Net.Orchestrator.Services.Commands;
 using RIoT2.Net.Orchestrator.Services.Outbox;
 using RIoT2.Net.Orchestrator.Services.Matter;
@@ -44,13 +46,17 @@ builder.Services.AddControllers()
 
 // The OpenAPI document is generated at build time into openapi/ (the REST route contract, plan M7
 // step 2); it isn't served at runtime.
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(o => o.AddOperationTransformer(BinaryRequestBodyAttribute.Apply));
 
 builder.Services.AddSingleton<Microsoft.Extensions.Logging.ILogger>(orchestratorLogger);
-builder.Services.AddSingleton<IObjectStore, FileObjectStore>();
-builder.Services.AddSingleton<IOrchestratorConfigurationService, OrchestratorConfigurationService>();
+builder.Services.AddSingleton<FileObjectStore>();
+builder.Services.AddSingleton<IObjectStore>(s => s.GetRequiredService<FileObjectStore>());
+builder.Services.AddSingleton<IObjectStoreArchive>(s => s.GetRequiredService<FileObjectStore>());
+builder.Services.AddSingleton<OrchestratorConfigurationService>();
+builder.Services.AddSingleton<IOrchestratorConfigurationService>(s => s.GetRequiredService<OrchestratorConfigurationService>());
 builder.Services.AddSingleton<IOnlineNodeService, OnlineNodeService>();
-builder.Services.AddSingleton<IStoredObjectService, StoredObjectService>();
+builder.Services.AddSingleton<StoredObjectService>();
+builder.Services.AddSingleton<IStoredObjectService>(s => s.GetRequiredService<StoredObjectService>());
 builder.Services.AddSingleton<IMessageStateService, MessageStateService>();
 builder.Services.AddSingleton(TimeProvider.System);
 // Durable delivery (design 7.1): workflow triggers wait in StoredObjects/outbox.db until Elsa takes them.
@@ -72,6 +78,9 @@ builder.Services.AddSingleton<MatterConfigurationStore>();
 builder.Services.AddSingleton<IMatterBridgeService, MatterBridgeService>();
 builder.Services.AddSingleton<IMatterReportSink>(s => s.GetRequiredService<IMatterBridgeService>());
 
+// Configuration backup and restore (design 7.4); scheduled backups go to Backups/.
+builder.Services.AddSingleton<BackupService>();
+
 if (!generatingOpenApiDocument)
 {
     //Start Mqtt Background service...
@@ -86,6 +95,9 @@ if (!generatingOpenApiDocument)
 
     //Start the Matter bridge with the application (it does nothing when disabled in its configuration)...
     builder.Services.AddHostedService<MatterBackgroundService>();
+
+    // Writes a backup at every RIOT2_BACKUP_SCHEDULE time; does nothing when it isn't set.
+    builder.Services.AddHostedService<BackupScheduler>();
 }
 
 builder.Services.AddCors(options =>

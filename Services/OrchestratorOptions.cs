@@ -11,6 +11,8 @@ namespace RIoT2.Net.Orchestrator.Services
         public const string UrlVariable = "RIOT2_ORCHESTRATOR_URL";
         public const string WorkflowTriggerTtlVariable = "RIOT2_OUTBOX_WORKFLOW_TTL";
         public const string CommandTtlVariable = "RIOT2_OUTBOX_COMMAND_TTL";
+        public const string BackupScheduleVariable = "RIOT2_BACKUP_SCHEDULE";
+        public const string BackupRetentionVariable = "RIOT2_BACKUP_RETENTION";
 
         /// <summary>Unique id; also the MQTT client id.</summary>
         public string Id { get; set; }
@@ -36,6 +38,19 @@ namespace RIoT2.Net.Orchestrator.Services
         public TimeSpan CommandTtl { get; set; } = TimeSpan.FromSeconds(30);
 
         /// <summary>
+        /// When to write a configuration backup to <c>Backups/</c> (design 7.4): a Quartz cron expression
+        /// with seconds, in the container's time zone. <c>RIOT2_BACKUP_SCHEDULE</c>; unset or empty turns
+        /// scheduled backups off.
+        /// </summary>
+        public string BackupSchedule { get; set; }
+
+        /// <summary>
+        /// How many backups <c>Backups/</c> keeps; the oldest are deleted. <c>RIOT2_BACKUP_RETENTION</c>,
+        /// 1–365; default 7.
+        /// </summary>
+        public int BackupRetention { get; set; } = 7;
+
+        /// <summary>
         /// Reads and validates the settings, and throws <see cref="ConfigurationValidationException"/>
         /// listing every problem (logged as critical) when any is missing or invalid.
         /// </summary>
@@ -49,8 +64,16 @@ namespace RIoT2.Net.Orchestrator.Services
                 Mqtt = MqttOptions.Read(settings),
                 Logging = LoggingOptions.Read(settings),
                 WorkflowTriggerTtl = TimeSpan.FromSeconds(settings.Integer(WorkflowTriggerTtlVariable, 300, 1, 86400)),
-                CommandTtl = TimeSpan.FromSeconds(settings.Integer(CommandTtlVariable, 30, 1, 86400))
+                CommandTtl = TimeSpan.FromSeconds(settings.Integer(CommandTtlVariable, 30, 1, 86400)),
+                BackupSchedule = settings.Optional(BackupScheduleVariable)?.Trim(),
+                BackupRetention = settings.Integer(BackupRetentionVariable, 7, 1, 365)
             };
+            if (!string.IsNullOrEmpty(options.BackupSchedule) && !Backup.CronSchedule.IsValid(options.BackupSchedule))
+            {
+                settings.AddError($"{BackupScheduleVariable} must be a Quartz cron expression with seconds, " +
+                    "for example \"0 0 3 * * ?\" for 03:00 every day");
+                options.BackupSchedule = null;
+            }
             settings.ThrowIfInvalid("orchestrator", logger);
             return options;
         }

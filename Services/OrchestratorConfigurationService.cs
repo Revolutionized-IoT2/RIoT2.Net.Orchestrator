@@ -37,12 +37,31 @@ namespace RIoT2.Net.Orchestrator.Services
                 return;
             try
             {
-                _nodes = _storedObjectService.GetAll<NodeDeviceConfiguration>().ToList();
+                _nodes = loadNodes();
             }
             catch (Exception x)
             {
                 _logger.LogError(x, "Could not refresh the node configurations after a change");
             }
+        }
+
+        /// <summary>
+        /// Reads the node and dashboard configurations from the store again, after a restore replaced
+        /// the stored files (design 7.4).
+        /// </summary>
+        public void Reload() => readNodesConfigurations();
+
+        // Configurations saved before 1.5.0, or restored from such a backup, have no revision; the hash
+        // always matches what is served.
+        private List<NodeDeviceConfiguration> loadNodes()
+        {
+            var nodes = _storedObjectService.GetAll<NodeDeviceConfiguration>().ToList();
+            foreach (var node in nodes)
+            {
+                node.Hash = ConfigurationHash.Stamp(node);
+                node.Revision ??= 1;
+            }
+            return nodes;
         }
         public OrchestratorConfiguration OrchestratorConfiguration { get { return _configuration; } }
         public List<NodeDeviceConfiguration> NodeConfigurations { get { return _nodes; } }
@@ -112,13 +131,7 @@ namespace RIoT2.Net.Orchestrator.Services
         {
             try
             {
-                _nodes = _storedObjectService.GetAll<NodeDeviceConfiguration>().ToList();
-                // Configurations saved before 1.5.0 have no revision; the hash always matches what is served.
-                foreach (var node in _nodes)
-                {
-                    node.Hash = ConfigurationHash.Stamp(node);
-                    node.Revision ??= 1;
-                }
+                _nodes = loadNodes();
                 _dashboardConfiguration = _storedObjectService.GetAll<DashboardConfiguration>().FirstOrDefault();
 
                 //Create default dashboard if there is nothing stored

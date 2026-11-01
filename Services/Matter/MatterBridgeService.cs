@@ -184,6 +184,33 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         }
 
         /// <inheritdoc />
+        public async Task RunStoppedAsync(Func<Task> action, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+
+            await _gate.WaitAsync(cancellationToken);
+            try
+            {
+                await StopCoreAsync();
+                try
+                {
+                    await action();
+                }
+                finally
+                {
+                    // The action may have replaced both documents and the fabric file.
+                    _configuration = _store.LoadConfiguration();
+                    _state = _store.LoadState();
+                    await StartCoreAsync(CancellationToken.None);
+                }
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        /// <inheritdoc />
         public async Task ResetAsync(CancellationToken cancellationToken = default)
         {
             await _gate.WaitAsync(cancellationToken);
@@ -622,7 +649,14 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
             return provisioning;
         }
 
-        private string ResolveCredentialsDirectory(string configuredDirectory)
+        private string ResolveCredentialsDirectory(string configuredDirectory) =>
+            ResolveCredentialsDirectory(_environment.ContentRootPath, configuredDirectory);
+
+        /// <summary>
+        /// The full path of the configured credentials directory, which must be relative to and stay
+        /// under <paramref name="contentRoot"/>; empty means <c>MatterCredentials</c>.
+        /// </summary>
+        internal static string ResolveCredentialsDirectory(string contentRoot, string configuredDirectory)
         {
             var directory = string.IsNullOrWhiteSpace(configuredDirectory)
                 ? "MatterCredentials"
@@ -631,7 +665,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
             if (Path.IsPathRooted(directory))
                 throw new ArgumentException("Matter credentials directory must be relative to the orchestrator content root.", nameof(configuredDirectory));
 
-            var contentRoot = Path.GetFullPath(_environment.ContentRootPath);
+            contentRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(contentRoot));
             var fullPath = Path.GetFullPath(Path.Combine(contentRoot, directory));
             var normalizedRoot = contentRoot.EndsWith(Path.DirectorySeparatorChar)
                 ? contentRoot

@@ -37,10 +37,10 @@
        ProjectReference. -->
 
   <!-- Local runtime state is gitignored and must never reach publish output or an image
-       (backlog item 20): StoredObjects holds node configurations with device credentials. -->
+       (backlog item 20): StoredObjects and Backups hold node configurations with device credentials. -->
   <ItemGroup>
-    <Content Remove="StoredObjects\**;MatterCredentials\**;Logs\**;Data\**" />
-    <None Remove="StoredObjects\**;MatterCredentials\**;Logs\**;Data\**" />
+    <Content Remove="StoredObjects\**;MatterCredentials\**;Logs\**;Data\**;Backups\**" />
+    <None Remove="StoredObjects\**;MatterCredentials\**;Logs\**;Data\**;Backups\**" />
   </ItemGroup>
 
   <!-- The REST route contract (plan M7 step 2): every build writes openapi/riot2-orchestrator.json,

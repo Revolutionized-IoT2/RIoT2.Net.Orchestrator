@@ -18,7 +18,7 @@ How the orchestrator fits into the platform:
 | Path | Contents |
 | --- | --- |
 | `Program.cs` | Host setup, logging, CORS, JSON profiles, health checks and DI registration |
-| `Controllers/` | REST API controllers for nodes, templates, state, dashboard, variables, commands, reports, Matter and the outbox |
+| `Controllers/` | REST API controllers for nodes, templates, state, dashboard, variables, commands, reports, Matter, the outbox and backups |
 | `Services/OrchestratorOptions.cs` | The `RIOT2_*` settings, read and validated at startup |
 | `Services/OrchestratorConfigurationService.cs` | Settings, stored configuration and template lookup |
 | `Services/OrchestratorMqttService.cs` | MQTT report/command routing and state updates; reports go on to the automation provider, commands to the command outbox |
@@ -26,6 +26,7 @@ How the orchestrator fits into the platform:
 | `Services/Commands/` | `CommandOutbox`: commands through the outbox, one dispatcher per node, and their results (design 7.1) |
 | `Services/Outbox/` | The durable outbox: SQLite store, dispatcher, health check (design 7.1) |
 | `Services/Persistence/FileObjectStore.cs` | File-backed JSON storage under `StoredObjects/` |
+| `Services/Backup/` | Configuration backup and restore, and the backup schedule (design 7.4) |
 | `Services/Matter/` | Matter Control Bridge configuration, commissioning and endpoint bridging |
 | `CustomJsonSettings/` | Controller JSON settings (`OrchestratorJsonOptions`) and the optional `json-naming-policy` formatter profiles |
 | `openapi/riot2-orchestrator.json` | OpenAPI document of the REST routes, written by every build and committed |
@@ -51,6 +52,8 @@ invalid setting, for example `Invalid orchestrator configuration: {problem}; {pr
 | `RIOT2_OUTBOX_COMMAND_TTL` | No | Seconds a command waits for its node and its answer before it expires; 1–86400, default 30 |
 | `RIOT2_LOG_FORMAT` | No | `text` (default) or `json` for the console and `Logs/RIoT2.log` |
 | `RIOT2_LOG_LEVEL` | No | `Trace` … `Critical`; default `Information` |
+| `RIOT2_BACKUP_SCHEDULE` | No | When to write a backup to `Backups/`: a Quartz cron expression with seconds, such as `0 0 3 * * ?` (03:00 daily, local time); unset is off |
+| `RIOT2_BACKUP_RETENTION` | No | How many backups `Backups/` keeps; 1–365, default 7 |
 
 Logs go to the console and to `Logs/RIoT2.log` (`/app/Logs`), rolled daily and at 50 MB, 14 files
 kept, through `AddRIoT2Logging()` from `RIoT2.Core.Hosting`. Lines logged while a command or a
@@ -72,8 +75,8 @@ $env:RIOT2_MQTT_PASSWORD = ""
 dotnet run --project .\RIoT2.Net.Orchestrator\RIoT2.Net.Orchestrator.csproj
 ```
 
-Do not copy values from `Properties/launchSettings.json`, `StoredObjects/`, `Logs/` or
-`MatterCredentials/` into documentation or images; those locations are for local/runtime data.
+Do not copy values from `Properties/launchSettings.json`, `StoredObjects/`, `Logs/`,
+`MatterCredentials/` or `Backups/` into documentation or images; those locations are for local/runtime data.
 
 ## Storage and Matter
 
@@ -87,6 +90,18 @@ The Matter Control Bridge is disabled by default. Enable and configure it throug
 `POST /api/matter/configuration`. Generated test credentials and the fabric store are written under
 `MatterConfiguration.CredentialsDirectory`, which must be relative to the content root and defaults
 to `MatterCredentials`.
+
+## Backup and restore
+
+`POST /api/v2/backup` returns a zip of `StoredObjects/` (without the outbox) and the Matter
+credentials folder, with a `backup-manifest.json` that lists each file's size and SHA-256.
+`POST /api/v2/restore` (zip body) checks the whole archive first and changes nothing when anything
+is wrong. Otherwise it saves the current configuration to `Backups/riot2-pre-restore-<time>.zip`,
+stops the Matter bridge, replaces the files while saves wait, reloads every cache, restarts the
+bridge and sends every node a configuration command. `RIOT2_BACKUP_SCHEDULE` writes
+`Backups/riot2-backup-<time>.zip` and keeps the newest `RIOT2_BACKUP_RETENTION`. Backups hold
+device credentials and Matter keys. Use and file format:
+[backup-and-restore.md](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/guides/backup-and-restore.md).
 
 ## API, MQTT and workflows
 
@@ -178,7 +193,7 @@ Use `/health` for container or orchestrator health checks; the image's `HEALTHCH
 `docker ps` shows the state. It is `Unhealthy` while the MQTT client
 is disconnected from the broker, and `Degraded` (still HTTP 200) when more than 500 workflow
 triggers are pending or one is older than half its time-to-live. For persistent deployments, mount writable directories or volumes for
-`/app/StoredObjects`, `/app/Logs` and `/app/MatterCredentials`. Don't mount `/app/Data`: it only
+`/app/StoredObjects`, `/app/Logs`, `/app/MatterCredentials` and `/app/Backups`. Don't mount `/app/Data`: it only
 holds the image's `Manifest.json`. Matter commissioning usually also
 needs host networking for mDNS and IPv6. The compose file in
 [deploy/](https://github.com/Revolutionized-IoT2/.github/tree/main/deploy) runs the orchestrator

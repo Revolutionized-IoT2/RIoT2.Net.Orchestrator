@@ -66,7 +66,8 @@ must keep them passing.
 | `Services/Commands/` | `CommandOutbox` (one `OutboxDispatcher` per node, result waiting, late results) and `CommandDelivery` (the v2 status) |
 | `Services/Automation/` | `IAutomationProvider` (ADR 0008) and `ElsaAutomationProvider`, which stores triggers in the outbox and runs their dispatcher as a hosted service |
 | `Services/Outbox/` | `OutboxStore` (`StoredObjects/outbox.db`, plain SQL over `Microsoft.Data.Sqlite`), `OutboxDispatcher` (FIFO per target, backoff, TTL, cleanup), `OutboxHealthCheck` |
-| `Services/Persistence/` | File-backed `StoredObjects/<Type>/<Id>.json` object store |
+| `Services/Persistence/` | File-backed `StoredObjects/<Type>/<Id>.json` object store; `IObjectStoreArchive` exports and replaces it all |
+| `Services/Backup/` | Configuration backup and restore (design 7.4): `BackupArchive` (zip and manifest validation), `BackupService`, `BackupScheduler` (`RIOT2_BACKUP_SCHEDULE`) |
 | `Services/Matter/` | Matter Control Bridge configuration, endpoint composition, commissioning and report/command bridging |
 | `Services/WorkflowTriggerClient.cs` | Reused gRPC client/channel with a five-second workflow trigger deadline; used only by `ElsaAutomationProvider` |
 | `Protos/riot_trigger.proto` | gRPC trigger contract, kept in lockstep with Elsa's `riot.proto` |
@@ -115,7 +116,7 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   `Json.SerializeIgnoreNulls` for wire payloads that use Core models.
 - Keep `RIoT2.Core`, `RIoT2.Matter` and `RIoT2.Matter.ControlBridge` as package references. The
   Dockerfile restores from GitHub Packages and cannot see project references.
-- Current package pins are `RIoT2.Core` `1.7.0`, `RIoT2.Matter` `1.0.0` and
+- Current package pins are `RIoT2.Core` and `RIoT2.Core.Hosting` `1.9.0`, `RIoT2.Matter` `1.0.0` and
   `RIoT2.Matter.ControlBridge` `1.0.0`, all published. Use `C:\Src\RIoT2\.localfeed` as an extra
   NuGet source only to try unreleased versions.
 - Keep `PackageReference` items versionless; package versions belong in `Directory.Packages.props`.
@@ -145,6 +146,9 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   (`verify-generated`) fails otherwise, and the RIoT2.UI route test reads it. A change to a response
   or stored format must regenerate the golden files in `RIoT2.Core/contracts/golden` (RIoT2.Tests
   with `RIOT2_UPDATE_GOLDEN=1`).
+- New persisted state goes in `StoredObjects/` (or the Matter credentials folder), so backups carry it;
+  a new stored type that must load is added to `BackupService.CheckRestorable`. A restore replaces
+  files under the `StoredObjectService` lock inside `IMatterBridgeService.RunStoppedAsync`.
 - Logging is `AddRIoT2Logging()` (RIoT2.Core.Hosting), set by `RIOT2_LOG_*`; add no sinks,
   providers or `Logging` sections. Scope work for one message with `BeginIdScope(LogScope…)`.
 
@@ -157,7 +161,7 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
 - `MatterBridgeService` is registered as `IMatterBridgeService` and, through a factory, as
   `IMatterReportSink`, so the container disposes it twice; `DisposeAsync` must stay idempotent.
 - The Web SDK includes `**/*.json` as content, so the `.csproj` (publish) and `.dockerignore`
-  exclude `StoredObjects/`, `MatterCredentials/`, `Logs/` and `Data/`. Add new runtime folders to both.
+  exclude `StoredObjects/`, `MatterCredentials/`, `Logs/`, `Data/` and `Backups/`. Add new runtime folders to both.
 - `Properties/launchSettings.json`, `StoredObjects/`, `Logs/` and `MatterCredentials/` can hold
   local values or secrets: never copy them into docs, images or examples.
 - Workflow delivery is at-least-once: a trigger whose answer is lost is delivered again with the
@@ -189,22 +193,12 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
 
 ## Related work
 
-- Backlog items
-  [2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md),
-  [7](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md),
-  [13](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md),
-  [14](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md),
-  [17](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md) and
-  [18](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md).
+- [Backlog items](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md) 2, 7, 13, 14, 17 and 18.
 - Maintainer action
   [MA2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/README.md#ma2-cut-a-core-release-and-align-all-consumers).
-- Plans
-  [M2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/plans/m02-system-text-json-persistence.md),
-  [M3](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/plans/m03-split-oversized-classes.md),
-  [M4](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/plans/m04-typed-configuration.md),
-  [M7](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/plans/m07-contract-integration-tests.md) and
-  [M8](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/plans/m08-dotnet10-migration.md).
+- [Plans](https://github.com/Revolutionized-IoT2/.github/tree/main/docs/plans) M2, M3, M4, M7 and M8.
 - Designs
   [7.1](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/reliable-delivery.md),
-  [7.2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/desired-state-configuration.md) and
+  [7.2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/desired-state-configuration.md),
+  [7.4](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/operations.md) and
   [7.5](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/security-mode.md).

@@ -5,6 +5,26 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-01
+
+Backup and restore ([I21](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i21-backup-and-restore-m), design 7.4 phase 3).
+No port or user changes; mount a volume at `/app/Backups` for scheduled backups.
+
+- Added: `POST /api/v2/backup` returns a zip of `StoredObjects/` (without `outbox.db`) and the
+  Matter credentials folder, with a `backup-manifest.json` (format version, time, kind,
+  orchestrator id, versions, and each file's size and SHA-256).
+- Added: `POST /api/v2/restore` (zip body) and `POST /api/v2/backups/{name}/restore`. The whole
+  archive is checked first: a damaged, changed or foreign zip, an unsafe path, a file that doesn't
+  load or a newer format is rejected with `400` and every reason, and nothing changes. Otherwise
+  the current configuration is saved as `Backups/riot2-pre-restore-<time>.zip`, the Matter bridge
+  stops, the files are replaced while saves wait, every cache reloads, the bridge starts again,
+  and every node gets a configuration command.
+- Added: `RIOT2_BACKUP_SCHEDULE` (a Quartz cron expression with seconds; unset is off) writes
+  `Backups/riot2-backup-<time>.zip`; `RIOT2_BACKUP_RETENTION` (default 7) is how many backups are
+  kept. `GET /api/v2/backups` lists them with the schedule and the last run, and
+  `GET /api/v2/backups/{name}` downloads one.
+- Changed: the image creates `/app/Backups`. The OpenAPI document describes the zip bodies.
+
 ## [1.6.0] - 2026-11-01
 
 Consistent logging ([I20](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i20-consistent-logging-s), design 7.4 phase 2), with RIoT2.Core 1.9.0.

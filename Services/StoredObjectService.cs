@@ -129,6 +129,53 @@ namespace RIoT2.Net.Orchestrator.Services
             StoredObjectEvent?.Invoke(typeof(T), null, OperationType.Deleted);
         }
 
+        /// <summary>Runs <paramref name="action"/> while no object can be saved or deleted.</summary>
+        public TResult Exclusive<TResult>(Func<TResult> action)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+            lock (_sync)
+            {
+                return action();
+            }
+        }
+
+        /// <summary>
+        /// Runs <paramref name="replace"/>, which changes the stored files, while no object can be saved
+        /// or deleted, then drops every cached object, so the next read loads the new files. Call
+        /// <see cref="AnnounceReplaced{T}"/> afterwards for the types whose listeners must hear of it.
+        /// </summary>
+        public void Replace(Action replace)
+        {
+            ArgumentNullException.ThrowIfNull(replace);
+            lock (_sync)
+            {
+                try
+                {
+                    replace();
+                }
+                finally
+                {
+                    _objects.Clear();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Raises <see cref="StoredObjectEvent"/> after <see cref="Replace"/>: <c>Deleted</c> for each of
+        /// <paramref name="previousIds"/> that is gone, then <c>Updated</c> for every object of
+        /// <typeparamref name="T"/> now stored.
+        /// </summary>
+        public void AnnounceReplaced<T>(IEnumerable<string> previousIds)
+        {
+            ArgumentNullException.ThrowIfNull(previousIds);
+            var current = GetAll<T>().ToList();
+            var currentIds = current.Select(x => (string)(x as dynamic).Id).ToHashSet(StringComparer.Ordinal);
+            foreach (var id in previousIds.Where(id => !currentIds.Contains(id)).Distinct(StringComparer.Ordinal).ToList())
+                StoredObjectEvent?.Invoke(typeof(T), id, OperationType.Deleted);
+            foreach (var obj in current)
+                StoredObjectEvent?.Invoke(typeof(T), obj, OperationType.Updated);
+        }
+
         private void delete<T>(string id = "", bool persistent = true)
         {
             var t = getTypeString(typeof(T));

@@ -4,7 +4,7 @@
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS base
 WORKDIR /app
 RUN apk add --upgrade --no-cache tzdata \
-    && mkdir -p /app/Data /app/StoredObjects /app/Logs /app/MatterCredentials \
+    && mkdir -p /app/Data /app/StoredObjects /app/Logs /app/MatterCredentials /app/Backups \
     && chown -R $APP_UID:0 /app
 ENV DOTNET_RUNNING_IN_CONTAINER=true
 ENV ASPNETCORE_HTTP_PORTS=8080

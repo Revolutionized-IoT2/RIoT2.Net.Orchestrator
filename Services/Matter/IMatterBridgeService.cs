@@ -43,5 +43,12 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         /// it again with fresh onboarding codes.
         /// </summary>
         Task ResetAsync(CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Stops the bridge, runs <paramref name="action"/>, then reads the configuration and state from
+        /// the store again and starts the bridge if it is enabled. A restore (design 7.4) replaces the
+        /// stored documents and the fabric file this way, so the running bridge can't overwrite them.
+        /// </summary>
+        Task RunStoppedAsync(Func<Task> action, CancellationToken cancellationToken = default);
     }
 }
