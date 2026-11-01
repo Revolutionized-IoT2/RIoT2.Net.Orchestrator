@@ -5,6 +5,12 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.13.1] - 2026-11-01
+
+- Fixed: the image starts again (1.13.0 failed with `FileNotFoundException` for
+  `Microsoft.Bcl.AsyncInterfaces`): built with RIoT2.Core 1.14.1, whose `RIoT2.Core.Mqtt` declares
+  that dependency ([I28](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i28-narrow-references-and-generated-models-m)). Don't run 1.13.0.
+
 ## [1.13.0] - 2026-11-01
 
 Narrow Core references ([I28](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i28-narrow-references-and-generated-models-m), plan M1 step 4), with RIoT2.Core 1.14.0. No route, port, user,
