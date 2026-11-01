@@ -57,8 +57,8 @@ must keep them passing.
 | Path | Contents |
 |---|---|
 | `Program.cs` | ASP.NET Core host, logging (`AddRIoT2Logging()`), CORS, JSON profiles, DI, health checks and hosted services |
-| `Controllers/` | Anonymous REST controllers, one per resource (I23): nodes, templates, state, variables, plugin and cron checks, dashboard, reports, commands (`api/v2/commands`), Matter, backup and the outbox. Moved actions keep their paths and OpenAPI tags (explicit routes, `[Tags]`). `DeprecatedGetAliasAttribute` marks the old state-changing `GET` routes |
-| `CustomJsonSettings/` | `OrchestratorJsonOptions` (controller JSON settings) and the `json-naming-policy: pascal\|lower` MVC formatter profiles |
+| `Controllers/` | Anonymous REST controllers, one per resource: nodes, templates, state, variables, plugin and cron checks, dashboard, reports, commands (`api/v2/commands`), Matter, backup and the outbox. `DeprecatedGetAliasAttribute` marks the old state-changing `GET` routes |
+| `CustomJsonSettings/` | `OrchestratorJsonOptions` (controller JSON settings) and the deprecated `json-naming-policy: pascal\|lower` profiles (`NamingPolicyHeaderDeprecation`; removed in I45) |
 | `openapi/riot2-orchestrator.json` | Generated OpenAPI document (the REST route contract), committed |
 | `Services/OrchestratorOptions.cs` | Every `RIOT2_*` setting the orchestrator reads, validated at startup with Core's `SettingsReader` |
 | `Services/OrchestratorConfigurationService.cs` | Settings from `IOptions<OrchestratorOptions>`, stored node/dashboard configuration and template lookup |
@@ -67,7 +67,7 @@ must keep them passing.
 | `Services/Commands/` | `CommandOutbox` (one `OutboxDispatcher` per node, result waiting, late results) and `CommandDelivery` (the v2 status) |
 | `Services/Automation/` | `IAutomationProvider` (ADR 0008) and `ElsaAutomationProvider`, which stores triggers in the outbox and runs their dispatcher as a hosted service |
 | `Services/Outbox/` | `OutboxStore` (`StoredObjects/outbox.db`, plain SQL over `Microsoft.Data.Sqlite`), `OutboxDispatcher` (FIFO per target, backoff, TTL, cleanup), `OutboxHealthCheck` |
-| `Services/Persistence/` | File-backed `StoredObjects/<Type>/<Id>.json` object store; `IObjectStoreArchive` exports and replaces it all |
+| `Services/Persistence/` | `IStoredObjectStore` (typed; `StoredObjectService`), `StoredObjectJson` (storage format), the `StoredObjects/<Type>/<Id>.json` files, `IObjectStoreArchive` (export, replace, `.archive/`), `LegacyStoredObjects` |
 | `Services/OrchestratorMetrics.cs` | Meter `RIoT2.Orchestrator` (design 7.4); names in the hub's `contracts/metrics.md`, pinned by RIoT2.Tests |
 | `Services/Backup/` | Configuration backup and restore (design 7.4): `BackupArchive` (zip and manifest validation), `BackupService`, `BackupScheduler` (`RIOT2_BACKUP_SCHEDULE`) |
 | `Services/Matter/` | `MatterBridgeService` (lifecycle) with `MatterCredentials`, `MatterProvisioning`, `MatterHostNetwork` and `MatterBridgedEndpoints` (endpoints, reports, reachability) |
@@ -118,11 +118,10 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   `Json.SerializeIgnoreNulls` for wire payloads that use Core models.
 - Keep `RIoT2.Core`, `RIoT2.Matter` and `RIoT2.Matter.ControlBridge` as package references. The
   Dockerfile restores from GitHub Packages and cannot see project references.
-- Package pins: `RIoT2.Core` and `RIoT2.Core.Hosting` `1.11.0`, `RIoT2.Matter` and
+- Package pins: `RIoT2.Core` and `RIoT2.Core.Hosting` `1.12.0`, `RIoT2.Matter` and
   `RIoT2.Matter.ControlBridge` `1.0.0`, and the transitive `System.Security.Cryptography.Pkcs`
   `10.0.14` (drop it once RIoT2.Matter brings a patched one). Use `C:\Src\RIoT2\.localfeed` only to
   try unreleased versions.
-- Keep `PackageReference` items versionless; package versions belong in `Directory.Packages.props`.
 - `FileObjectStore` must validate type names and ids as file names. Never build persistence paths
   from raw ids.
 - Matter generated credentials and the fabric store must stay under a content-root-relative
@@ -143,8 +142,8 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   without `command-result/1`).
 - The outbox SQL is plain `Microsoft.Data.Sqlite`; no EF Core. A schema change raises
   `PRAGMA user_version` in `OutboxStore` and must open an existing `outbox.db`.
-- Preserve the `json-naming-policy` header profiles until M2 removes them through a compatibility
-  plan.
+- Stored types implement `IStoredObject` and go through `IStoredObjectStore`, written only with
+  `StoredObjectJson`. No `dynamic` or Newtonsoft; I45 removes the `json-naming-policy` profiles.
 - A route change must commit the regenerated `openapi/riot2-orchestrator.json`; CI
   (`verify-generated`) fails otherwise, and the RIoT2.UI route test reads it. A change to a response
   or stored format must regenerate the golden files in `RIoT2.Core/contracts/golden` (RIoT2.Tests
@@ -168,19 +167,19 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
 - `Properties/launchSettings.json`, `StoredObjects/`, `Logs/` and `MatterCredentials/` can hold
   local values or secrets: never copy them into docs, images or examples.
 - Workflow delivery is at-least-once: a trigger whose answer is lost is delivered again with the
-  same `message_id`. Elsa 1.3.0 deduplicates; an older Elsa runs it twice.
+  same `message_id`; Elsa deduplicates it.
 - Delivery is FIFO per target, so a failing trigger holds up the ones behind it until it succeeds,
   fails or expires (at most `RIOT2_OUTBOX_WORKFLOW_TTL`, default 300 s).
 - `ElsaAutomationProvider` and `CommandOutbox` are singletons and, through factories, hosted
   services registered after `MqttBackgroundService`. They stop first, and the reports MQTT drains
   while stopping are stored for the next start. Keep that order.
 - `CommandOutbox` needs its transport: `OrchestratorMqttService` calls `UseTransport(this)` in its
-  constructor, which avoids a dependency cycle. Until then, and while MQTT is down, commands wait.
+  constructor (no dependency cycle). Until then, and while MQTT is down, commands wait.
 - Elsa sets no MQTT last will, so a crashed Elsa still looks online: triggers are retried until
   they expire. Elsa's next announcement resets the backoff.
 - `outbox.db` is opened without connection pooling; the file is released when the store is
   disposed. Unit tests create the store in a temporary directory.
-- `POST /api/command/execute` returns once the command is queued (Orchestrator 1.4.0). Use
+- `POST /api/command/execute` returns once the command is queued. Use
   `POST /api/v2/commands` with `"wait": true` to learn whether the device executed it.
 - A command delivered while its node is still applying its configuration is answered `rejected`
   and retried, so the first commands after a node comes online can take a second or two.

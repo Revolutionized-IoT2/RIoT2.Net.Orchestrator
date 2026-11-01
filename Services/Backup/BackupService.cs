@@ -3,14 +3,11 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
-using RIoT2.Core.Interfaces.Services;
+using RIoT2.Core.Interfaces;
 using RIoT2.Core.Models;
 using RIoT2.Core.Utils;
 using RIoT2.Net.Orchestrator.Services.Matter;
 using RIoT2.Net.Orchestrator.Services.Persistence;
-
-// Stored configuration keeps Newtonsoft's type-name handling until typed persistence (I26).
-#pragma warning disable CS0618
 
 namespace RIoT2.Net.Orchestrator.Services.Backup
 {
@@ -152,7 +149,12 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
                 // Not cancellable from here on: a half-done restore is worse than a late answer.
                 await _matter.RunStoppedAsync(() =>
                 {
-                    _storedObjects.Replace(() => _archive.ReplaceAll(storedFiles));
+                    _storedObjects.Replace(() =>
+                    {
+                        _archive.ReplaceAll(storedFiles);
+                        // A backup from before 1.11.0 can bring the rule engine's files back.
+                        LegacyStoredObjects.Archive(_archive, _logger);
+                    });
                     ReplaceCredentials(credentialFiles);
                     _configuration.Reload();
                     return Task.CompletedTask;
@@ -204,9 +206,9 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
                     var json = Text(file.Content);
                     object loaded = type switch
                     {
-                        nameof(NodeDeviceConfiguration) => Json.DeserializeAutoTypeNameHandling<NodeDeviceConfiguration>(json),
-                        nameof(DashboardConfiguration) => Json.DeserializeAutoTypeNameHandling<DashboardConfiguration>(json),
-                        nameof(Variable) => Json.DeserializeAutoTypeNameHandling<Variable>(json),
+                        nameof(NodeDeviceConfiguration) => StoredObjectJson.Deserialize<NodeDeviceConfiguration>(json),
+                        nameof(DashboardConfiguration) => StoredObjectJson.Deserialize<DashboardConfiguration>(json),
+                        nameof(Variable) => StoredObjectJson.Deserialize<Variable>(json),
                         nameof(MatterBridgeState) => Json.Deserialize<MatterBridgeState>(json),
                         nameof(MatterConfiguration) => Json.Deserialize<MatterConfiguration>(json),
                         // Types this version doesn't use are restored as they are.
@@ -363,10 +365,10 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
         {
             ["orchestrator"] = _configuration.OrchestratorConfiguration?.Manifest?.Version
                 ?? typeof(BackupService).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
-            ["core"] = typeof(IStoredObjectService).Assembly.GetName().Version?.ToString(3)
+            ["core"] = typeof(IStoredObject).Assembly.GetName().Version?.ToString(3)
         };
 
-        private static List<string> Ids<T>(IEnumerable<T> objects) => objects.Select(o => (string)(o as dynamic).Id).ToList();
+        private static List<string> Ids<T>(IEnumerable<T> objects) where T : IStoredObject => objects.Select(o => o.Id).ToList();
 
         // As the store reads it: a byte order mark is not part of the JSON.
         private static string Text(byte[] content)

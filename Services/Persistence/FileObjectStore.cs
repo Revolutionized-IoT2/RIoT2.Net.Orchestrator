@@ -4,6 +4,9 @@ namespace RIoT2.Net.Orchestrator.Services.Persistence
     {
         private const string ObjectExtension = ".json";
 
+        /// <summary>The hidden folder in the store root that <see cref="Archive"/> moves files to.</summary>
+        public const string ArchiveFolder = ".archive";
+
         private readonly string _rootFolder;
         private readonly ILogger<FileObjectStore> _logger;
 
@@ -138,6 +141,26 @@ namespace RIoT2.Net.Orchestrator.Services.Persistence
                 if (restored)
                     TryDelete(previous);
             }
+        }
+
+        public int Archive(string typeName)
+        {
+            var directory = new DirectoryInfo(GetTypeDirectoryPath(typeName));
+            if (!directory.Exists)
+                return 0;
+
+            var archive = Directory.CreateDirectory(Path.Combine(_rootFolder, ArchiveFolder, typeName));
+            var moved = 0;
+            foreach (var file in directory.EnumerateFiles().ToList())
+            {
+                var target = Path.Combine(archive.FullName, file.Name);
+                for (var i = 1; File.Exists(target); i++)
+                    target = Path.Combine(archive.FullName, $"{Path.GetFileNameWithoutExtension(file.Name)}-{i}{file.Extension}");
+                file.MoveTo(target);
+                moved++;
+            }
+            directory.Delete(true);
+            return moved;
         }
 
         private void PutBack(string root, string previous, List<string> movedAway, List<string> movedIn)

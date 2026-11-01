@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Models;
 using RIoT2.Net.Orchestrator.Models;
+using RIoT2.Net.Orchestrator.Services.Persistence;
 
 namespace RIoT2.Net.Orchestrator.Controllers
 {
@@ -13,9 +13,9 @@ namespace RIoT2.Net.Orchestrator.Controllers
     [ApiController]
     public class VariablesController : ControllerBase
     {
-        private readonly IStoredObjectService _storedObjectService;
+        private readonly IStoredObjectStore _storedObjectService;
 
-        public VariablesController(IStoredObjectService storedObjectService)
+        public VariablesController(IStoredObjectStore storedObjectService)
         {
             _storedObjectService = storedObjectService;
         }
@@ -29,8 +29,8 @@ namespace RIoT2.Net.Orchestrator.Controllers
         [Tags("Variable")]
         public IActionResult GetVariableValue(string id)
         {
-            var variable = _storedObjectService.GetAll<Variable>().FirstOrDefault(x => x.Id == id);
-            if (variable != default)
+            var variable = _storedObjectService.Get<Variable>(id);
+            if (variable != null)
                 return Ok(VariableDTO.ToVariableDTO(variable));
 
             return NotFound();

@@ -18,5 +18,13 @@ namespace RIoT2.Net.Orchestrator.Services.Persistence
         /// removed. Either all files are replaced or, on a failure, the previous ones are put back.
         /// </summary>
         void ReplaceAll(IReadOnlyList<StoredFile> files);
+
+        /// <summary>
+        /// Moves every file of <paramref name="typeName"/> to the hidden <c>.archive/&lt;typeName&gt;/</c>
+        /// folder in the store root, which is not loaded, backed up or replaced by a restore. A file
+        /// already archived under the same name is kept, and the new one gets a numbered name.
+        /// </summary>
+        /// <returns>The number of files moved.</returns>
+        int Archive(string typeName);
     }
 }

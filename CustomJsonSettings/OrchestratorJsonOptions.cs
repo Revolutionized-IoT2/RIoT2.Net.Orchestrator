@@ -15,7 +15,6 @@ namespace RIoT2.Net.Orchestrator.CustomJsonSettings
             options.DictionaryKeyPolicy = naming;
             options.PropertyNameCaseInsensitive = true;
             options.WriteIndented = true;
-            options.Converters.Add(new JObjectConverter());
         }
     }
 }

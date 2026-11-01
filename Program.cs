@@ -45,9 +45,9 @@ builder.Services.AddSingleton(Options.Create(orchestratorOptions));
 // Add services to the container.
 builder.Services.AddControllers()
     .AddJsonOptions(o => OrchestratorJsonOptions.Configure(o.JsonSerializerOptions, JsonNamingPolicy.CamelCase))
-    //header json-naming-policy: pascal, This uses "original formatting"
+    // Deprecated (NamingPolicyHeaderDeprecation): the json-naming-policy header's "pascal" (the C# names)
+    // and "lower" variants.
     .AddJsonOptions("pascal", o => OrchestratorJsonOptions.Configure(o.JsonSerializerOptions, null))
-    //header json-naming-policy: lower
     .AddJsonOptions("lower", o => OrchestratorJsonOptions.Configure(o.JsonSerializerOptions, new LowerCaseNamingPolicy()));
 
 // The OpenAPI document is generated at build time into openapi/ (the REST route contract, plan M7
@@ -62,7 +62,7 @@ builder.Services.AddSingleton<OrchestratorConfigurationService>();
 builder.Services.AddSingleton<IOrchestratorConfigurationService>(s => s.GetRequiredService<OrchestratorConfigurationService>());
 builder.Services.AddSingleton<IOnlineNodeService, OnlineNodeService>();
 builder.Services.AddSingleton<StoredObjectService>();
-builder.Services.AddSingleton<IStoredObjectService>(s => s.GetRequiredService<StoredObjectService>());
+builder.Services.AddSingleton<IStoredObjectStore>(s => s.GetRequiredService<StoredObjectService>());
 builder.Services.AddSingleton<IMessageStateService, MessageStateService>();
 builder.Services.AddSingleton<ITemplateCatalog, TemplateCatalog>();
 builder.Services.AddSingleton(TimeProvider.System);
@@ -122,6 +122,9 @@ var app = builder.Build();
 
 if (!generatingOpenApiDocument)
 {
+    // The rule engine's files, which this version doesn't read, go to StoredObjects/.archive/.
+    LegacyStoredObjects.Archive(app.Services.GetRequiredService<IObjectStoreArchive>(), orchestratorLogger);
+
     var orchestratorConfiguration = app.Services.GetRequiredService<IOrchestratorConfigurationService>().OrchestratorConfiguration;
     orchestratorLogger.LogInformation($"Services initialized. {orchestratorConfiguration.Manifest?.Name} - {orchestratorConfiguration.Manifest?.Version}");
 
@@ -133,7 +136,7 @@ if (!generatingOpenApiDocument)
     IHostApplicationLifetime lifetime = app.Lifetime;
     lifetime.ApplicationStarted.Register(() =>
     {
-        foreach (var variable in app.Services.GetService<IStoredObjectService>().GetAll<Variable>())
+        foreach (var variable in app.Services.GetService<IStoredObjectStore>().GetAll<Variable>())
             app.Services.GetService<IMessageStateService>().SetState(variable.CreateReport());
     });
 }
@@ -145,6 +148,8 @@ if (!generatingOpenApiDocument)
 app.UseAuthorization();
 
 app.UseCors();
+
+app.UseMiddleware<NamingPolicyHeaderDeprecation>();
 
 app.MapHealthChecks("/health").AllowAnonymous();
 app.MapControllers();

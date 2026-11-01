@@ -25,12 +25,12 @@ How the orchestrator fits into the platform:
 | `Services/Automation/` | `IAutomationProvider` and its only implementation, `ElsaAutomationProvider` (ADR 0008) |
 | `Services/Commands/` | `CommandOutbox`: commands through the outbox, one dispatcher per node, and their results (design 7.1) |
 | `Services/Outbox/` | The durable outbox: SQLite store, dispatcher, health check (design 7.1) |
-| `Services/Persistence/FileObjectStore.cs` | File-backed JSON storage under `StoredObjects/` |
+| `Services/Persistence/` | The typed store `IStoredObjectStore`, its storage format `StoredObjectJson`, and the file-backed storage under `StoredObjects/` |
 | `Services/Backup/` | Configuration backup and restore, and the backup schedule (design 7.4) |
 | `Services/OrchestratorMetrics.cs` | The `RIoT2.Orchestrator` meter: reports, workflow deliveries, outbox, commands, nodes (design 7.4) |
 | `Services/Templates/` | `ITemplateCatalog`, which shapes every REST template listing |
 | `Services/Matter/` | Matter Control Bridge: lifecycle, credentials, provisioning and bridged endpoints |
-| `CustomJsonSettings/` | Controller JSON settings (`OrchestratorJsonOptions`) and the optional `json-naming-policy` formatter profiles |
+| `CustomJsonSettings/` | Controller JSON settings (`OrchestratorJsonOptions`) and the deprecated `json-naming-policy` formatter profiles |
 | `openapi/riot2-orchestrator.json` | OpenAPI document of the REST routes, written by every build and committed |
 | `Protos/riot_trigger.proto` | gRPC workflow trigger client contract |
 | `Dockerfile` | Multi-stage .NET 10 container image |
@@ -88,8 +88,10 @@ Do not copy values from `Properties/launchSettings.json`, `StoredObjects/`, `Log
 
 ## Storage and Matter
 
-`FileObjectStore` stores JSON as `StoredObjects/<TypeName>/<id>.json` under the application content
-root. The outbox is `StoredObjects/outbox.db` (SQLite, with `-wal` and `-shm` files while it runs);
+`StoredObjectService` keeps node configurations, variables and the dashboard (`IStoredObject`
+types) in memory and stores them with System.Text.Json; `FileObjectStore` writes them as
+`StoredObjects/<TypeName>/<id>.json` under the application content root. Files of types this
+version no longer reads (the old rule engine's `Rule/`) move to `StoredObjects/.archive/`. The outbox is `StoredObjects/outbox.db` (SQLite, with `-wal` and `-shm` files while it runs);
 include it in full-system backups, not in configuration backups. It validates type names and ids before using them as file names. The stored node
 configuration schema, variable behavior and persistence layout are documented in the platform
 [configuration contract](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/configuration.md).
@@ -142,7 +144,7 @@ triggers in order over gRPC to the online Elsa workflow node, with the outbox id
 which Elsa deduplicates on:
 
 - No workflow node online: the triggers wait, and are delivered when Elsa announces itself.
-- Transient failure (unreachable, timeout after five seconds, any gRPC error except
+- Transient failure (unreachable, five-second timeout, any gRPC error but
   `InvalidArgument`): retried after 1 s, 2 s, 4 s … at most 30 s; later triggers wait behind it.
 - Rejected (`success=false` or `InvalidArgument`): marked `failed`, logged as an error and not
   retried.
@@ -151,24 +153,22 @@ which Elsa deduplicates on:
 
 Pending triggers survive a restart. Final rows are deleted after 24 hours.
 `GET /api/v2/outbox/summary` shows the messages per status, the oldest pending message and the last
-ten errors. `WorkflowTriggerClient` reuses one channel per workflow endpoint; each call's deadline
-is five seconds or the trigger's expiry, whichever comes first.
+ten errors.
 
-Commands go through the same outbox (Orchestrator 1.4.0), from `POST /api/command/execute`,
+Commands go through the same outbox, from `POST /api/command/execute`,
 `POST /api/v2/commands`, Elsa and the Matter bridge. `CommandOutbox` runs one dispatcher per node,
 so a node's commands keep their order, and the outbox id is the command's `correlationId`:
 
 - Node offline: the command waits until the node announces itself, or until
   `RIOT2_OUTBOX_COMMAND_TTL` (or the request's `ttlSeconds`) passes and it is marked `expired`.
-- Node with `command-result/1` (Node 1.4.0): it must answer on `riot2/node/{id}/command/result`
+- Node with `command-result/1`: it must answer on `riot2/node/{id}/command/result`
   within five seconds, or the command is sent again with the same id, which the node runs only once.
   `executed` sets the command state; `failed` and `unknownCommand` are final; `rejected` is retried.
 - Node without it (older nodes, firmware): the command is sent once, the state is set, and the
   delivery is final as `sent`.
 
 `GET /api/v2/commands/{correlationId}` shows a delivery's status. The state-changing `GET` routes
-(`/api/nodes/{id}/delete`, `/api/nodes/variable/{id}/delete`, `/api/dashboard/reports/history/reset`
-and the three Matter actions) have `DELETE`/`POST` routes under `/api/v2`; the old routes still work,
+have `DELETE`/`POST` routes under `/api/v2`; the old routes still work,
 marked with `[DeprecatedGetAlias]`, which sends a `Deprecation` header and logs their first use.
 
 ## Docker

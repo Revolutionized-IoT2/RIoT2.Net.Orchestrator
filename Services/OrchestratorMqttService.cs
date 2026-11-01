@@ -6,6 +6,7 @@ using RIoT2.Core.Models;
 using RIoT2.Net.Orchestrator.Services.Automation;
 using RIoT2.Net.Orchestrator.Services.Commands;
 using RIoT2.Net.Orchestrator.Services.Matter;
+using RIoT2.Net.Orchestrator.Services.Persistence;
 
 namespace RIoT2.Net.Orchestrator.Services
 {
@@ -14,7 +15,7 @@ namespace RIoT2.Net.Orchestrator.Services
         private MqttClient _client;
         private readonly IOrchestratorConfigurationService _configuration;
         private readonly IMessageStateService _deviceStateService;
-        private readonly IStoredObjectService _storedObjectService;
+        private readonly IStoredObjectStore _storedObjectService;
         private readonly IOnlineNodeService _onlineNodeService;
         private readonly IAutomationProvider _automation;
         private readonly ICommandOutbox _commands;
@@ -34,7 +35,7 @@ namespace RIoT2.Net.Orchestrator.Services
         private Task _stopTask;
         private int _disposed;
 
-        public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IMessageStateService deviceStateService, IStoredObjectService storedObjectService, IOnlineNodeService onlineNodeService, IAutomationProvider automation, ICommandOutbox commands, ILogger<OrchestratorMqttService> logger, IMatterReportSink matterSink = null, MqttClient mqttClient = null)
+        public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IMessageStateService deviceStateService, IStoredObjectStore storedObjectService, IOnlineNodeService onlineNodeService, IAutomationProvider automation, ICommandOutbox commands, ILogger<OrchestratorMqttService> logger, IMatterReportSink matterSink = null, MqttClient mqttClient = null)
         {
             _logger = logger;
             _storedObjectService = storedObjectService;
@@ -61,7 +62,7 @@ namespace RIoT2.Net.Orchestrator.Services
             _cts = new CancellationTokenSource();
             _consumerTask = ProcessQueueAsync(_workQueue.Reader, "MQTT", _cts.Token);
 
-            _storedObjectService.StoredObjectEvent += IStoredObjectService_StoredObjectEvent;
+            _storedObjectService.Changed += OnStoredObjectChanged;
             _commands.UseTransport(this);
         }
 
@@ -113,26 +114,26 @@ namespace RIoT2.Net.Orchestrator.Services
             }
         }
 
-        void IStoredObjectService_StoredObjectEvent(Type type, dynamic obj, OperationType changeType)
+        void OnStoredObjectChanged(StoredObjectChange change)
         {
-            //Send report when Variable changes
-            if (type == typeof(Variable) && changeType is OperationType.Created or OperationType.Updated)
+            // A created or changed variable is published as a report.
+            if (change.Object is Variable variable && change.Operation is OperationType.Created or OperationType.Updated)
             {
-                var report = (obj as Variable).CreateReport();
+                var report = variable.CreateReport();
                 Enqueue(() => SendReport(report));
             }
 
-            //Send Configuration command to node if its configuration is being updated
-            if (type == typeof(NodeDeviceConfiguration))
+            // A saved node configuration is announced to its node with a configuration command.
+            if (change.Is<NodeDeviceConfiguration>())
             {
-                string id = changeType == OperationType.Deleted ? null : (obj as NodeDeviceConfiguration)?.Id;
+                var id = change.Id;
                 if (_matterSink != null)
                     Enqueue(_matterSink.OnConfigurationChangedAsync);
-                if (id != null)
+                if (change.Operation != OperationType.Deleted && id != null)
                     Enqueue(() => SendConfigurationCommand(id));
                 // A deleted node's retained status would describe a configuration that no longer exists.
-                if (changeType == OperationType.Deleted && obj is string deleted && !String.IsNullOrEmpty(deleted))
-                    Enqueue(() => ClearNodeStatusAsync(deleted));
+                if (change.Operation == OperationType.Deleted && !String.IsNullOrEmpty(id))
+                    Enqueue(() => ClearNodeStatusAsync(id));
             }
         }
 
@@ -146,7 +147,7 @@ namespace RIoT2.Net.Orchestrator.Services
             if (Interlocked.Exchange(ref _disposed, 1) != 0)
                 return;
 
-            _storedObjectService.StoredObjectEvent -= IStoredObjectService_StoredObjectEvent;
+            _storedObjectService.Changed -= OnStoredObjectChanged;
             _cts.Cancel();
             _workQueue.Writer.TryComplete();
             try
@@ -220,7 +221,7 @@ namespace RIoT2.Net.Orchestrator.Services
         {
             _client.MessageReceivedAsync -= _client_MessageReceivedAsync;
             _client.ConnectedAsync -= sendOrchestratorOnlineCommand;
-            _storedObjectService.StoredObjectEvent -= IStoredObjectService_StoredObjectEvent;
+            _storedObjectService.Changed -= OnStoredObjectChanged;
             // Draining stores the remaining reports' workflow triggers in the outbox.
             _workQueue.Writer.TryComplete();
             await _consumerTask;

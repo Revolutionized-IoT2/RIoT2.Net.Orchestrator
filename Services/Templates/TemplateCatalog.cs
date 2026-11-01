@@ -1,6 +1,7 @@
 using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Models;
 using RIoT2.Net.Orchestrator.Models;
+using RIoT2.Net.Orchestrator.Services.Persistence;
 
 namespace RIoT2.Net.Orchestrator.Services.Templates
 {
@@ -19,9 +20,9 @@ namespace RIoT2.Net.Orchestrator.Services.Templates
         public const string VariableDevice = "Variable";
 
         private readonly IOrchestratorConfigurationService _configuration;
-        private readonly IStoredObjectService _storedObjects;
+        private readonly IStoredObjectStore _storedObjects;
 
-        public TemplateCatalog(IOrchestratorConfigurationService configuration, IStoredObjectService storedObjects)
+        public TemplateCatalog(IOrchestratorConfigurationService configuration, IStoredObjectStore storedObjects)
         {
             ArgumentNullException.ThrowIfNull(configuration);
             ArgumentNullException.ThrowIfNull(storedObjects);

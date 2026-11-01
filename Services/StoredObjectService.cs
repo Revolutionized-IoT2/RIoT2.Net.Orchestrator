@@ -1,135 +1,117 @@
 ﻿using RIoT2.Core;
-using RIoT2.Core.Interfaces.Services;
-using RIoT2.Core.Utils;
+using RIoT2.Core.Interfaces;
 using RIoT2.Net.Orchestrator.Services.Persistence;
-
-// Stored configuration keeps Newtonsoft's type-name handling until typed persistence (I26).
-#pragma warning disable CS0618
 
 namespace RIoT2.Net.Orchestrator.Services
 {
-    public class StoredObjectService : IStoredObjectService
+    /// <inheritdoc cref="IStoredObjectStore" />
+    /// <remarks>The files are written with <see cref="StoredObjectJson"/>.</remarks>
+    public class StoredObjectService : IStoredObjectStore
     {
-        private ILogger _logger;
-        private Dictionary<string, List<dynamic>> _objects;
+        private readonly ILogger _logger;
         private readonly IObjectStore _store;
 
-        // Guards all access to _objects and the associated persistence calls.
-        // Compound check-then-act sequences (save/delete/load) require a single lock
-        // to remain atomic.
-        private readonly object _sync = new object();
+        // The cached objects by type name; each list holds objects of that type only.
+        private readonly Dictionary<string, List<IStoredObject>> _objects = new(StringComparer.Ordinal);
+
+        // Guards _objects and the persistence calls, so a check-then-act sequence (save, delete, load)
+        // is atomic.
+        private readonly object _sync = new();
 
         public StoredObjectService(IObjectStore store, ILogger<StoredObjectService> logger)
         {
+            ArgumentNullException.ThrowIfNull(store);
             _store = store;
-            _objects = new Dictionary<string, List<dynamic>>();
             _logger = logger;
         }
 
-        public event StoredObjectEventHandler StoredObjectEvent;
+        public event Action<StoredObjectChange> Changed;
 
-        public void Delete<T>(string id, bool persistent = true)
+        public IReadOnlyList<T> GetAll<T>() where T : class, IStoredObject
         {
             lock (_sync)
             {
-                delete<T>(id, persistent);
+                // A snapshot, so callers can enumerate it while the store changes.
+                return Objects<T>().Cast<T>().ToList();
             }
-            StoredObjectEvent?.Invoke(typeof(T), id, OperationType.Deleted);
         }
 
-        public IEnumerable<T> GetAll<T>()
+        public T Get<T>(string id) where T : class, IStoredObject
         {
             lock (_sync)
             {
-                var t = getTypeString(typeof(T));
-                if (!_objects.ContainsKey(t))
-                {
-                    load<T>();
-                    if (!_objects.ContainsKey(t))
-                        return [];
-                }
-
-                var objs = _objects[t];
-                if (objs == null)
-                    return [];
-
-                // Materialize a snapshot inside the lock so callers can enumerate safely.
-                return objs.OfType<T>().ToList();
+                return (T)Objects<T>().FirstOrDefault(x => x.Id == id);
             }
         }
 
-        public string Save<T>(T obj, bool persistent = true, bool autoTypeNameHandling = false, bool includeNulls = false)
+        public string Save<T>(T obj, bool persistent = true) where T : class, IStoredObject
         {
             ArgumentNullException.ThrowIfNull(obj);
-            OperationType op = OperationType.NoChange;
-            string id;
-            var hasNoChange = false;
+            OperationType operation;
 
             lock (_sync)
             {
-                id = Guid.NewGuid().ToString();
+                var objects = Objects<T>();
+                if (string.IsNullOrEmpty(obj.Id))
+                    obj.Id = Guid.NewGuid().ToString();
 
-                var t = getTypeString(typeof(T));
-                if (!_objects.ContainsKey(t))
-                    load<T>();
-
-                if (String.IsNullOrEmpty((obj as dynamic).Id))
-                    (obj as dynamic).Id = id;
-                else
-                    id = (obj as dynamic).Id;
-
-                var json = Json.SerializeAutoTypeNameHandling(obj, autoTypeNameHandling, includeNulls);
-
-                //Check if current exists -> if does and no change, do nothing
-                var objs = _objects[t];
-                var currentObject = objs.FirstOrDefault(x => x.Id == id);
-                if (currentObject != null)
+                var json = StoredObjectJson.Serialize(obj);
+                var current = objects.FirstOrDefault(x => x.Id == obj.Id);
+                if (current != null && StoredObjectJson.Serialize((T)current) == json)
                 {
-                    var currentJson = Json.SerializeAutoTypeNameHandling(currentObject, autoTypeNameHandling, includeNulls);
-                    if (currentJson == json)
-                    {
-                        _logger.LogInformation("No change in existing object. Object not Saved.");
-                        hasNoChange = true;
-                    }
+                    _logger.LogInformation("No change in {Type} {Id}; not saved", TypeName<T>(), obj.Id);
+                    operation = OperationType.NoChange;
                 }
-
-                if (!hasNoChange)
+                else
                 {
                     if (persistent)
                     {
                         try
                         {
-                            _store.Write(t, id, json);
+                            _store.Write(TypeName<T>(), obj.Id, json);
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, "Could not save {Type} with id {Id}", t, id);
+                            _logger.LogError(ex, "Could not save {Type} with id {Id}", TypeName<T>(), obj.Id);
                             return null;
                         }
                     }
 
-                    op = currentObject == null ? OperationType.Created : OperationType.Updated;
-                    objs.RemoveAll(x => x.Id == id);
-                    objs.Add(obj);
+                    operation = current == null ? OperationType.Created : OperationType.Updated;
+                    objects.RemoveAll(x => x.Id == obj.Id);
+                    objects.Add(obj);
                 }
             }
 
-            StoredObjectEvent?.Invoke(typeof(T), obj, op);
-            return id;
+            Changed?.Invoke(new StoredObjectChange(typeof(T), obj.Id, obj, operation));
+            return obj.Id;
         }
 
-        public T Get<T>()
+        public void Delete<T>(string id, bool persistent = true) where T : class, IStoredObject
         {
-            return GetAll<T>().FirstOrDefault();
+            ArgumentException.ThrowIfNullOrEmpty(id);
+            IStoredObject deleted;
+            lock (_sync)
+            {
+                var objects = Objects<T>();
+                if (persistent)
+                    _store.Delete(TypeName<T>(), id);
+
+                deleted = objects.FirstOrDefault(x => x.Id == id);
+                if (deleted != null)
+                    objects.Remove(deleted);
+            }
+            Changed?.Invoke(new StoredObjectChange(typeof(T), id, deleted, OperationType.Deleted));
         }
 
-        public void DeleteAll<T>()
+        public void DeleteAll<T>() where T : class, IStoredObject
         {
             lock (_sync)
             {
-                delete<T>();
+                _store.DeleteAll(TypeName<T>());
+                _objects[TypeName<T>()] = [];
             }
-            StoredObjectEvent?.Invoke(typeof(T), null, OperationType.Deleted);
+            Changed?.Invoke(new StoredObjectChange(typeof(T), null, null, OperationType.Deleted));
         }
 
         /// <summary>Runs <paramref name="action"/> while no object can be saved or deleted.</summary>
@@ -164,75 +146,51 @@ namespace RIoT2.Net.Orchestrator.Services
         }
 
         /// <summary>
-        /// Raises <see cref="StoredObjectEvent"/> after <see cref="Replace"/>: <c>Deleted</c> for each of
+        /// Raises <see cref="Changed"/> after <see cref="Replace"/>: <c>Deleted</c> for each of
         /// <paramref name="previousIds"/> that is gone, then <c>Updated</c> for every object of
         /// <typeparamref name="T"/> now stored.
         /// </summary>
-        public void AnnounceReplaced<T>(IEnumerable<string> previousIds)
+        public void AnnounceReplaced<T>(IEnumerable<string> previousIds) where T : class, IStoredObject
         {
             ArgumentNullException.ThrowIfNull(previousIds);
-            var current = GetAll<T>().ToList();
-            var currentIds = current.Select(x => (string)(x as dynamic).Id).ToHashSet(StringComparer.Ordinal);
+            var current = GetAll<T>();
+            var currentIds = current.Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
             foreach (var id in previousIds.Where(id => !currentIds.Contains(id)).Distinct(StringComparer.Ordinal).ToList())
-                StoredObjectEvent?.Invoke(typeof(T), id, OperationType.Deleted);
+                Changed?.Invoke(new StoredObjectChange(typeof(T), id, null, OperationType.Deleted));
             foreach (var obj in current)
-                StoredObjectEvent?.Invoke(typeof(T), obj, OperationType.Updated);
+                Changed?.Invoke(new StoredObjectChange(typeof(T), obj.Id, obj, OperationType.Updated));
         }
 
-        private void delete<T>(string id = "", bool persistent = true)
+        // The cached objects of T, loaded from the store on first use. Call inside the lock.
+        private List<IStoredObject> Objects<T>() where T : class, IStoredObject
         {
-            var t = getTypeString(typeof(T));
-            if (!_objects.ContainsKey(t))
-                load<T>();
+            var name = TypeName<T>();
+            if (_objects.TryGetValue(name, out var objects))
+                return objects;
 
-            var objs = _objects[t];
-
-            if (persistent)
-            {
-                if (id == "")
-                    _store.DeleteAll(t);
-                else
-                    _store.Delete(t, id);
-            }
-
-            if (id == "") //delete everything of type T
-            {
-                _objects.Remove(t);
-            }
-            else //just delete the one with the id
-            {
-                var objToDelete = objs.FirstOrDefault(x => x.Id == id);
-                if (objToDelete != null)
-                    objs.Remove(objToDelete);
-            }
-
-        }
-
-        private void load<T>()
-        {
-            var t = getTypeString(typeof(T));
-            var objList = new List<dynamic>();
-
+            objects = [];
             try
             {
-                foreach (var json in _store.ReadAll(t))
-                    objList.Add(Json.DeserializeAutoTypeNameHandling<T>(json));
-
-                if (_objects.ContainsKey(t))
-                    _objects[t] = objList;
-                else
-                    _objects.Add(t, objList);
+                foreach (var json in _store.ReadAll(name))
+                {
+                    var obj = StoredObjectJson.Deserialize<T>(json);
+                    if (obj == null)
+                        _logger.LogWarning("Skipped an empty {Type} file", name);
+                    else
+                        objects.Add(obj);
+                }
             }
             catch (Exception x)
             {
-                _logger.LogError(x, "Could not load objects of type {Type}", t);
+                // Nothing is cached, so a save can't replace objects that failed to load.
+                _logger.LogError(x, "Could not load objects of type {Type}", name);
                 throw;
             }
+
+            _objects[name] = objects;
+            return objects;
         }
 
-        private string getTypeString(Type type)
-        {
-            return type.FullName.Split('.').Last();
-        }
+        private static string TypeName<T>() => typeof(T).Name;
     }
 }

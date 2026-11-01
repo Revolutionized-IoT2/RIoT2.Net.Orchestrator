@@ -5,6 +5,27 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-11-01
+
+Typed persistence ([I26](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i26-typed-persistence-m), plan M2 steps 4–5), with RIoT2.Core 1.12.0. No route, port,
+user or volume changes. The stored files keep their format, so configurations keep their hashes,
+and a downgrade to 1.10.0 reads them.
+
+- Changed: `StoredObjectService` is typed. It implements the orchestrator's `IStoredObjectStore`
+  (`GetAll<T>`, `Get<T>(id)`, `Save`, `Delete` and `DeleteAll` for `IStoredObject` types) and
+  raises a typed `StoredObjectChange` (type, id, object, operation) instead of Core's `dynamic`
+  `StoredObjectEvent`. There is no `dynamic` and no Newtonsoft in the orchestrator any more.
+- Changed: `StoredObjects/` is read and written with System.Text.Json (`StoredObjectJson`), not
+  with Newtonsoft's type-name handling. Node configurations keep their nulls, a `ValueModel` is
+  still written as `{"type":n}`, and emoji are written as they are (Core 1.12.0). The node and
+  dashboard JSON posted by the UI is read with `Json.Deserialize`.
+- Added: legacy `Rule` files, from the retired rule engine, are moved to `StoredObjects/.archive/Rule/`
+  at startup and after a restore, with a warning. The archive is not loaded, backed up or replaced.
+- Deprecated: the `json-naming-policy` request header (`pascal`, `lower`). A response to a request
+  with it carries `Deprecation: true`, and the first use of each value is logged as a warning.
+  Core 2.0 (I45) removes it; use the default camelCase.
+- Removed: the `JObjectConverter` shim in the controller JSON settings; nothing yields a `JObject`.
+
 ## [1.10.0] - 2026-11-01
 
 System.Text.Json on the wire ([I25](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i25-systemtextjson-on-the-wire-m)), with RIoT2.Core 1.11.0. No route, port, user or

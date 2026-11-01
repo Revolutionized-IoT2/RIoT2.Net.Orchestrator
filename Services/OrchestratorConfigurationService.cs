@@ -2,9 +2,7 @@
 using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Models;
 using RIoT2.Core.Utils;
-
-// Stored configuration keeps Newtonsoft's type-name handling until typed persistence (I26).
-#pragma warning disable CS0618
+using RIoT2.Net.Orchestrator.Services.Persistence;
 
 namespace RIoT2.Net.Orchestrator.Services
 {
@@ -14,9 +12,9 @@ namespace RIoT2.Net.Orchestrator.Services
         private List<NodeDeviceConfiguration> _nodes = [];
         private ILogger _logger;
         private DashboardConfiguration _dashboardConfiguration;
-        private IStoredObjectService _storedObjectService;
+        private IStoredObjectStore _storedObjectService;
 
-        public OrchestratorConfigurationService(IOptions<OrchestratorOptions> options, IStoredObjectService storedObjectService, ILogger<OrchestratorConfigurationService> logger) 
+        public OrchestratorConfigurationService(IOptions<OrchestratorOptions> options, IStoredObjectStore storedObjectService, ILogger<OrchestratorConfigurationService> logger) 
         {
             ArgumentNullException.ThrowIfNull(options);
             _logger = logger;
@@ -28,15 +26,15 @@ namespace RIoT2.Net.Orchestrator.Services
                 Mqtt = options.Value.Mqtt.ToConfiguration(options.Value.Id)
             };
             readNodesConfigurations();
-            _storedObjectService.StoredObjectEvent += OnStoredObject;
+            _storedObjectService.Changed += OnStoredObject;
         }
 
         // The store raises its event before Save returns. This handler is subscribed before every service
         // that uses this one (they are constructed later), so a configuration command sent for a save
         // already sees the saved revision and hash.
-        private void OnStoredObject(Type type, dynamic obj, RIoT2.Core.OperationType changeType)
+        private void OnStoredObject(StoredObjectChange change)
         {
-            if (type != typeof(NodeDeviceConfiguration))
+            if (!change.Is<NodeDeviceConfiguration>())
                 return;
             try
             {
@@ -180,7 +178,7 @@ namespace RIoT2.Net.Orchestrator.Services
         {
             try
             {
-                NodeDeviceConfiguration conf = Json.DeserializeAutoTypeNameHandling<NodeDeviceConfiguration>(json);
+                NodeDeviceConfiguration conf = Json.Deserialize<NodeDeviceConfiguration>(json);
                 if (conf != null)
                 {
                     return SaveNodeConfiguration(conf);
@@ -238,7 +236,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 : previous.Hash == configuration.Hash ? previous.Revision ?? 1
                 : (previous.Revision ?? 0) + 1;
 
-            var id = _storedObjectService.Save(configuration, true, false, true);
+            var id = _storedObjectService.Save(configuration);
             if (string.IsNullOrEmpty(id))
                 return null;
 
@@ -247,7 +245,7 @@ namespace RIoT2.Net.Orchestrator.Services
         }
         public string SaveDashboardConfiguration(string json)
         {
-            DashboardConfiguration dashboard = Json.DeserializeAutoTypeNameHandling<DashboardConfiguration>(json);
+            DashboardConfiguration dashboard = Json.Deserialize<DashboardConfiguration>(json);
             if (dashboard != null)
                 return SaveDashboardConfiguration(dashboard);
 
