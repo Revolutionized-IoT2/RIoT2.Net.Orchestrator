@@ -3,6 +3,9 @@ using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Models;
 using RIoT2.Core.Utils;
 
+// Stored configuration keeps Newtonsoft's type-name handling until typed persistence (I26).
+#pragma warning disable CS0618
+
 namespace RIoT2.Net.Orchestrator.Services
 {
     public class OrchestratorConfigurationService : IOrchestratorConfigurationService

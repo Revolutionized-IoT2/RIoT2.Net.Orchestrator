@@ -5,6 +5,18 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-11-01
+
+System.Text.Json on the wire ([I25](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i25-systemtextjson-on-the-wire-m)), with RIoT2.Core 1.11.0. No route, port, user or
+volume changes, and the JSON is the same: configurations keep their hashes, so no node re-applies
+anything.
+
+- Changed: responses, MQTT messages and the command outbox are written and read with Core's
+  System.Text.Json `Json` helpers. Stored configuration (`StoredObjects/`) is still read and
+  written with Newtonsoft's type-name handling until typed persistence (I26).
+- Fixed: an unreadable presence message is ignored with a warning again; it now fails with
+  `System.Text.Json.JsonException`.
+
 ## [1.9.0] - 2026-11-01
 
 Orchestrator restructure ([I23](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i23-orchestrator-restructure-m), plan M3 steps 1–3).

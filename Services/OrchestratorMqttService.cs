@@ -355,7 +355,7 @@ namespace RIoT2.Net.Orchestrator.Services
             {
                 return Json.Deserialize<NodeOnlineMessage>(json);
             }
-            catch (Newtonsoft.Json.JsonException)
+            catch (System.Text.Json.JsonException)
             {
                 return null;
             }
