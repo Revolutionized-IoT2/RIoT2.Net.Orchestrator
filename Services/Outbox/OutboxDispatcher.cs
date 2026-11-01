@@ -1,3 +1,5 @@
+using RIoT2.Core.Utils;
+
 namespace RIoT2.Net.Orchestrator.Services.Outbox
 {
     public enum DeliveryOutcome
@@ -43,6 +45,7 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
         private readonly Func<OutboxMessage, CancellationToken, Task<DeliveryResult>> _deliver;
         private readonly ILogger _logger;
         private readonly TimeProvider _time;
+        private readonly string _idScope;
         private readonly SemaphoreSlim _signal = new(0, 1);
         private long _nextCleanup;
         private long _nextExpiryLog;
@@ -55,8 +58,10 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
         /// <param name="description">What a message is, for log messages, e.g. "workflow trigger".</param>
         /// <param name="isAvailable">Whether the target can be reached now; while it can't, messages wait.</param>
         /// <param name="deliver">Delivers one message. An exception counts as <see cref="DeliveryOutcome.Retry"/>.</param>
+        /// <param name="idScope">The <see cref="LogScope"/> property that carries a message's id while it is delivered.</param>
         public OutboxDispatcher(OutboxStore store, string target, string description, Func<bool> isAvailable,
-            Func<OutboxMessage, CancellationToken, Task<DeliveryResult>> deliver, ILogger logger, TimeProvider time)
+            Func<OutboxMessage, CancellationToken, Task<DeliveryResult>> deliver, ILogger logger, TimeProvider time,
+            string idScope = LogScope.MessageId)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _target = target ?? throw new ArgumentNullException(nameof(target));
@@ -65,6 +70,7 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
             _deliver = deliver ?? throw new ArgumentNullException(nameof(deliver));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _time = time ?? throw new ArgumentNullException(nameof(time));
+            _idScope = idScope;
         }
 
         /// <summary>The delay before the attempt that follows failed attempt number <paramref name="attempts"/>.</summary>
@@ -156,6 +162,8 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
 
         private async Task DeliverAsync(OutboxMessage message, CancellationToken cancellationToken)
         {
+            // Everything logged while this message is delivered, here and by the transport, carries its id.
+            using var scope = _logger.BeginIdScope(_idScope, message.Id);
             DeliveryResult result;
             try
             {

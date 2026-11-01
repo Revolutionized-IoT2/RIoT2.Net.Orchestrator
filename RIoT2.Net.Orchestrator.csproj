@@ -23,8 +23,7 @@
     <PackageReference Include="QRCoder" />
     <PackageReference Include="RIoT2.Matter" />
     <PackageReference Include="RIoT2.Matter.ControlBridge" />
-    <PackageReference Include="Serilog.AspNetCore" />
-    <PackageReference Include="Serilog.Sinks.File" />
+    <PackageReference Include="RIoT2.Core.Hosting" />
     <PackageReference Include="Google.Protobuf" />
     <PackageReference Include="Grpc.Net.Client" />
     <PackageReference Include="Grpc.Tools">

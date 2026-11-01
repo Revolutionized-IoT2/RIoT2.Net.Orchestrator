@@ -113,6 +113,8 @@ namespace RIoT2.Net.Orchestrator.Services.Commands
                 UpdatedUtc = now
             };
             _store.Add(message);
+            using (_logger.BeginIdScope(LogScope.CorrelationId, id))
+                _logger.LogDebug("Command {CommandId} for {NodeId} queued; it expires in {Seconds} s", command.Id, nodeId, lifetime.TotalSeconds);
             Dispatcher(nodeId).Signal();
             return CommandDelivery.From(message);
         }
@@ -142,6 +144,7 @@ namespace RIoT2.Net.Orchestrator.Services.Commands
                 _logger.LogWarning("Ignored a command result from {NodeId} without a correlation id", nodeId);
                 return;
             }
+            using var scope = _logger.BeginIdScope(LogScope.CorrelationId, result.CorrelationId);
             if (_waiting.TryGetValue(result.CorrelationId, out var waiter) && waiter.NodeId == nodeId)
             {
                 waiter.Result.TrySetResult(result);
@@ -225,7 +228,7 @@ namespace RIoT2.Net.Orchestrator.Services.Commands
                 if (_dispatchers.TryGetValue(nodeId, out var dispatcher))
                     return dispatcher;
                 dispatcher = new OutboxDispatcher(_store, nodeId, "command", () => IsAvailable(nodeId),
-                    (message, token) => DeliverAsync(nodeId, message, token), _logger, _time);
+                    (message, token) => DeliverAsync(nodeId, message, token), _logger, _time, LogScope.CorrelationId);
                 _dispatchers.Add(nodeId, dispatcher);
                 if (_running)
                     _runs.Add(dispatcher.RunAsync(_stopping));

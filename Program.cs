@@ -9,8 +9,8 @@ using RIoT2.Net.Orchestrator.Services.Commands;
 using RIoT2.Net.Orchestrator.Services.Outbox;
 using RIoT2.Net.Orchestrator.Services.Matter;
 using RIoT2.Net.Orchestrator.Services.Persistence;
+using RIoT2.Core.Hosting;
 using System.Text.Json;
-using Serilog;
 
 // Workflow nodes (e.g. Elsa) are reached over plain HTTP; allow cleartext HTTP/2 so Grpc.Net.Client can call them.
 AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
@@ -21,15 +21,9 @@ var generatingOpenApiDocument = System.Reflection.Assembly.GetEntryAssembly()?.G
 
 var builder = WebApplication.CreateBuilder(args);
 
-var serilog = new LoggerConfiguration()
-   .WriteTo.Console()
-   .WriteTo.File("Logs/RIoT2.log", rollingInterval: RollingInterval.Day, outputTemplate: "{Timestamp:dd.MM.yyyy HH:mm:ss.fff} [{Level}] {Message:lj}{NewLine}{Exception}", shared: true)
-   .CreateLogger();
-
-ILoggerFactory logger = LoggerFactory.Create(log =>
-{
-    log.AddSerilog(serilog);
-});
+// Console and Logs/RIoT2.log, text or JSON (RIOT2_LOG_FORMAT, RIOT2_LOG_LEVEL; design 7.4). Loggers
+// from this factory forward to the host's once it exists, so they share providers and log scopes.
+ILoggerFactory logger = builder.AddRIoT2Logging("orchestrator");
 
 Microsoft.Extensions.Logging.ILogger orchestratorLogger = logger.CreateLogger("RIoT2.Net.Orchestrator");
 

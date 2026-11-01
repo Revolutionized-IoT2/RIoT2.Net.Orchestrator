@@ -56,7 +56,7 @@ must keep them passing.
 
 | Path | Contents |
 |---|---|
-| `Program.cs` | ASP.NET Core host, Serilog, CORS, JSON profiles, DI, health checks and hosted services |
+| `Program.cs` | ASP.NET Core host, logging (`AddRIoT2Logging()`), CORS, JSON profiles, DI, health checks and hosted services |
 | `Controllers/` | Anonymous REST controllers for nodes, templates, state, dashboard, variables, commands (`api/v2/commands`), reports, Matter and the outbox (`api/v2/outbox`); `DeprecatedGetAliasAttribute` marks the old state-changing `GET` routes |
 | `CustomJsonSettings/` | `OrchestratorJsonOptions` (controller JSON settings) and the `json-naming-policy: pascal\|lower` MVC formatter profiles |
 | `openapi/riot2-orchestrator.json` | Generated OpenAPI document (the REST route contract), committed |
@@ -145,6 +145,8 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   (`verify-generated`) fails otherwise, and the RIoT2.UI route test reads it. A change to a response
   or stored format must regenerate the golden files in `RIoT2.Core/contracts/golden` (RIoT2.Tests
   with `RIOT2_UPDATE_GOLDEN=1`).
+- Logging is `AddRIoT2Logging()` (RIoT2.Core.Hosting), set by `RIOT2_LOG_*`; add no sinks,
+  providers or `Logging` sections. Scope work for one message with `BeginIdScope(LogScope…)`.
 
 ## Pitfalls
 
@@ -154,11 +156,10 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   SDK container (`DOTNET_RUNNING_IN_CONTAINER`).
 - `MatterBridgeService` is registered as `IMatterBridgeService` and, through a factory, as
   `IMatterReportSink`, so the container disposes it twice; `DisposeAsync` must stay idempotent.
-- The Web SDK includes `**/*.json` as content. The `.csproj` therefore excludes `StoredObjects/`,
-  `MatterCredentials/`, `Logs/` and `Data/` from publish, and `.dockerignore` excludes them from
-  the Docker context. Add any new runtime folder to both.
-- `Properties/launchSettings.json`, `StoredObjects/`, `Logs/` and `MatterCredentials/` can contain
-  local values or secrets. Do not copy their contents into docs, images or examples.
+- The Web SDK includes `**/*.json` as content, so the `.csproj` (publish) and `.dockerignore`
+  exclude `StoredObjects/`, `MatterCredentials/`, `Logs/` and `Data/`. Add new runtime folders to both.
+- `Properties/launchSettings.json`, `StoredObjects/`, `Logs/` and `MatterCredentials/` can hold
+  local values or secrets: never copy them into docs, images or examples.
 - Workflow delivery is at-least-once: a trigger whose answer is lost is delivered again with the
   same `message_id`. Elsa 1.3.0 deduplicates; an older Elsa runs it twice.
 - Delivery is FIFO per target, so a failing trigger holds up the ones behind it until it succeeds,

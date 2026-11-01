@@ -5,6 +5,19 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-01
+
+Consistent logging ([I20](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i20-consistent-logging-s), design 7.4 phase 2), with RIoT2.Core 1.9.0.
+
+- Changed: logging comes from `AddRIoT2Logging()` (RIoT2.Core.Hosting). The console and
+  `Logs/RIoT2.log` get the same lines, in a new format (`<time> [INF] <category>: <message>`),
+  or compact JSON with `RIOT2_LOG_FORMAT=json`; `RIOT2_LOG_LEVEL` sets the level. Files roll
+  daily and at 50 MB, 14 are kept (before: daily, no limit). ASP.NET Core's own messages, which
+  went to the console only and in another format, go through the same pipeline.
+- Added: each outbox delivery runs in a `CorrelationId` (commands) or `MessageId` (workflow
+  triggers) log scope; queueing a command (`Debug`) and its result are logged in it too.
+- Removed: the direct Serilog package references.
+
 ## [1.5.0] - 2026-10-14
 
 Desired-state configuration ([I16](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i16-desired-state-configuration-for-net-nodes-m),

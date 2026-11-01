@@ -49,6 +49,12 @@ invalid setting, for example `Invalid orchestrator configuration: {problem}; {pr
 | `RIOT2_MQTT_PASSWORD` | No | MQTT password |
 | `RIOT2_OUTBOX_WORKFLOW_TTL` | No | Seconds a workflow trigger waits for delivery before it expires; 1–86400, default 300 |
 | `RIOT2_OUTBOX_COMMAND_TTL` | No | Seconds a command waits for its node and its answer before it expires; 1–86400, default 30 |
+| `RIOT2_LOG_FORMAT` | No | `text` (default) or `json` for the console and `Logs/RIoT2.log` |
+| `RIOT2_LOG_LEVEL` | No | `Trace` … `Critical`; default `Information` |
+
+Logs go to the console and to `Logs/RIoT2.log` (`/app/Logs`), rolled daily and at 50 MB, 14 files
+kept, through `AddRIoT2Logging()` from `RIoT2.Core.Hosting`. Lines logged while a command or a
+workflow trigger is delivered end with `[CorrelationId=…]` or `[MessageId=…]`.
 
 Hosting variables such as `ASPNETCORE_HTTP_PORTS`, `ASPNETCORE_URLS`, `ASPNETCORE_ENVIRONMENT` and
 `TZ` are described in the platform
