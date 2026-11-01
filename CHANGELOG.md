@@ -5,13 +5,37 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-11-01
+
+Orchestrator restructure ([I23](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i23-orchestrator-restructure-m), plan M3 steps 1?3).
+No route, port, user or volume changes: the OpenAPI document has the same paths, operations and
+schemas (only their order changed).
+
+- Changed: every template listing comes from one `ITemplateCatalog` (`Services/Templates/`).
+  `GET /api/nodes/report/templates` now includes each template's `model`, like
+  `/api/report/templates`, and `GET /api/nodes/variable/templates` includes `address` (empty), like
+  `/api/variable/templates`. Golden files: RIoT2.Core `contracts/golden/http/templates-*.json`.
+- Changed: `NodesController` is split by resource, with the same routes and OpenAPI tags:
+  `NodesController` (configurations and online status), `TemplatesController` (every template
+  listing, also those of `ReportController`, `CommandController` and `VariableController`),
+  `StateController`, `VariablesController` (replaces `VariableController`), `PluginsController` and
+  `CronController`. No controller has more than about 150 lines.
+- Changed: without a stored state, `GET /api/nodes/report/{id}/state` asks only the node that owns
+  the report for its templates, instead of every online node.
+- Changed: `MatterBridgeService` keeps the lifecycle and delegates to `MatterCredentials`
+  (credentials directory, fabric store key and fabric table), `MatterProvisioning` (onboarding
+  bundle), `MatterHostNetwork` (network interfaces) and `MatterBridgedEndpoints` (endpoint
+  composition, report routing and reachability).
+- Security: pins `System.Security.Cryptography.Pkcs` 10.0.14. RIoT2.Matter 1.0.0 brings 10.0.12,
+  which has two denial-of-service advisories (GHSA-846f-f764-76mx, GHSA-2fmv-rv2c-59x7).
+
 ## [1.8.0] - 2026-11-01
 
 Metrics ([I22](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i22-metrics-m), design 7.4 phase 4), with RIoT2.Core 1.10.0.
 No port, user or volume changes.
 
 - Added: the meter `RIoT2.Orchestrator`: `riot2.reports.received` and `riot2.reports.unknown_template`
-  (by node), `riot2.workflow.deliveries` (by outcome), `riot2.outbox.pending` and`
+  (by node), `riot2.workflow.deliveries` (by outcome), `riot2.outbox.pending` and
   `riot2.outbox.oldest_age_seconds` (by kind), `riot2.commands` and the `riot2.command.latency`
   histogram (by outcome), `riot2.nodes.online` (by type) and `riot2.nodes.out_of_sync` (by state).
 - Added: `OTEL_EXPORTER_OTLP_ENDPOINT` exports them, with `riot2.mqtt.*`, ASP.NET Core and runtime

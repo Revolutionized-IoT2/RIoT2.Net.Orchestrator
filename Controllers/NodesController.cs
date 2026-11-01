@@ -1,30 +1,28 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Quartz;
-using RIoT2.Core;
 using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Models;
 using RIoT2.Core.Utils;
-using RIoT2.Net.Orchestrator.Models;
 using RIoT2.Net.Orchestrator.Services;
-using System.Net.Http.Headers;
 
 namespace RIoT2.Net.Orchestrator.Controllers
 {
+    /// <summary>
+    /// Node configurations and online status. Templates, state, variables, plugin checks and cron
+    /// validation have their own controllers under the same <c>api/Nodes</c> prefix.
+    /// </summary>
     [Route("api/[controller]")]
     [ApiController]
     public class NodesController : ControllerBase
     {
-        private IOrchestratorConfigurationService _configuration;
-        private IOnlineNodeService _onlineNodeService;
-        private IMessageStateService _messageStateService;
-        private IStoredObjectService _storedObjectService;
+        private readonly IOrchestratorConfigurationService _configuration;
+        private readonly IOnlineNodeService _onlineNodeService;
+        private readonly IMessageStateService _messageStateService;
 
-        public NodesController(IOrchestratorConfigurationService configuration, IOnlineNodeService onlineNodeService, IMessageStateService messageStateService, IStoredObjectService storedObjectService)
+        public NodesController(IOrchestratorConfigurationService configuration, IOnlineNodeService onlineNodeService, IMessageStateService messageStateService)
         {
             _configuration = configuration;
-            _onlineNodeService = onlineNodeService; 
+            _onlineNodeService = onlineNodeService;
             _messageStateService = messageStateService;
-            _storedObjectService = storedObjectService;
         }
 
         [HttpGet]
@@ -62,23 +60,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
                 x.OnlineNodeSettings.NodeBaseUrl
             }).ToList();
 
-
-
             return new OkObjectResult(nodes);
-        }
-
-        [HttpPost("validatecron")]
-        public IActionResult ValidateCron([FromBody] CronValidationResult cron)
-        {
-            bool isValid = CronExpression.IsValidExpression(cron.Expression);
-            if (isValid)
-                cron.Summary = new CronExpression(cron.Expression).GetExpressionSummary();
-
-            if (!string.IsNullOrEmpty(cron.Summary))
-                cron.Summary = cron.Summary.Replace("\n", "<br />");
-
-            cron.IsValid = isValid;
-            return new OkObjectResult(cron);
         }
 
         [HttpGet("{id}/configuration")]
@@ -117,52 +99,6 @@ namespace RIoT2.Net.Orchestrator.Controllers
             return new OkResult();
         }
 
-        [HttpPost("checkplugin")]
-        public async Task<IActionResult> CheckPluging([FromBody] PluginFile plugin)
-        {
-            try
-            {
-                if (plugin == null)
-                    return new BadRequestObjectResult("Plugin object cannot be null");
-
-                if (String.IsNullOrEmpty(plugin.Url)) 
-                {
-                    plugin.ErrorMessage = "Plugin Url must be provided";
-                    return new OkObjectResult(plugin);
-                }
-
-                if (!plugin.Url.ToLower().StartsWith("http://") && !plugin.Url.ToLower().StartsWith("https://"))
-                {
-                    plugin.ErrorMessage = "Not a valid url";
-                    return new OkObjectResult(plugin);
-                }
-
-                HttpContentHeaders metadata;
-                try
-                {
-                    metadata = await Web.GetUrlMetadata(plugin.Url);
-                }
-                catch (Exception x) 
-                {
-                    plugin.ErrorMessage = x.Message;
-                    return new OkObjectResult(plugin);
-                }
-
-                if (metadata == null) 
-                {
-                    plugin.ErrorMessage = "Plugin Url is not valid or accessible";
-                    return new OkObjectResult(plugin);
-                }
-    
-                plugin.Name = metadata.ContentDisposition?.FileName ?? "";
-                return new OkObjectResult(plugin);
-            }
-            catch (Exception x)
-            {
-                return StatusCode(500, x.Message);
-            }
-        }
-
         [HttpPost("configuration")]
         public IActionResult SaveConfiguration([FromBody] System.Text.Json.JsonElement json)
         {
@@ -179,210 +115,6 @@ namespace RIoT2.Net.Orchestrator.Controllers
                 return StatusCode(500, x.Message);
             }
         }
-
-        [HttpGet("report/{id}/state")]
-        public async Task<IActionResult> GetReportState(string id)
-        {
-            var report = _messageStateService.Reports.FirstOrDefault(x => x.Id == id);
-            if (report == null) //if there are no report, try fetching directly from online node
-            {
-                var templates = await _onlineNodeService.LoadDeviceConfigurationTemplatesAsync();
-                foreach (var node in templates.Keys) 
-                {
-                    var confs = templates[node];
-                    if (confs == null)
-                        continue;
-
-                    foreach (var device in confs) 
-                    {
-                        if (device.ReportTemplates == null)
-                            continue;
-
-                        //templates have random ids, so we need to find template with matching class
-                        var reportConfiguration = _configuration.NodeConfigurations.FirstOrDefault(x => x.Id == node)?.DeviceConfigurations.FirstOrDefault(x => x.ReportTemplates != null && x.ReportTemplates.Any(t => t.Id == id))?.ReportTemplates.FirstOrDefault(x => x.Id == id);
-                        if(reportConfiguration == null)
-                            continue;
-
-                        var reportTemplate = device.ReportTemplates.FirstOrDefault(x => x.Address == reportConfiguration.Address);
-                        if(reportTemplate != null)
-                            return Content(Json.Serialize(reportTemplate), "application/json");
-                    }
-                } 
-
-                return NotFound($"Could not find report state with ID: {id}");
-            }
-
-            return Content(Json.Serialize(report), "application/json");
-        }
-
-        [HttpGet("command/{id}/state")]
-        public IActionResult GetCommandState(string id)
-        {
-            var command = _messageStateService.Commands.FirstOrDefault(x => x.Id == id);
-            if (command == null)
-                return NotFound($"Could not find command state with ID: {id}");
-
-            return Content(Json.Serialize(command), "application/json");
-        }
-
-        [HttpPost("report/state")]
-        public IActionResult SetNodeReportStates([FromBody] IEnumerable<Report> reports)
-        {
-            try
-            {
-                foreach (var report in reports)
-                    _messageStateService.SetState(report);
-
-                return NoContent();
-            }
-            catch (Exception x)
-            {
-                return StatusCode(500, x.Message);
-            }
-        }
-
-        [HttpGet("report/templates")]
-        public IActionResult GetReportTemplatates()
-        {
-            var a = new List<object>();
-            foreach (var node in _configuration.NodeConfigurations) 
-            {
-                foreach (var device in node.DeviceConfigurations) 
-                {
-                    if (device.ReportTemplates == null)
-                        continue;
-
-                    foreach (var t in device.ReportTemplates)
-                    {
-                        a.Add(new NodeReportTemplate()
-                        {
-                            NodeId = node.Id,
-                            Node = node.Name,
-                            DeviceId = device.Id,
-                            Device = device.Name,
-                            Filters = t.Filters,
-                            Id = t.Id,
-                            Name = t.Name,
-                            Address = t.Address,
-                            Type =  t.Type,
-                            MaintainHistory = t.MaintainHistory,
-                        });
-                    }
-                }
-            }
-            return new OkObjectResult(a);
-        }
-
-        [HttpGet("variable/templates")]
-        public IActionResult GetVariableTemplatates()
-        {
-            var a = new List<object>();
-            foreach (var v in _storedObjectService.GetAll<Variable>())
-            {
-                a.Add(new
-                {
-                    NodeId = _configuration.OrchestratorConfiguration.Id,
-                    Node = "Orchestrator",
-                    DeviceId = "",
-                    Device = "Variable",
-                    //FilterOptions = v.fi .Filters,
-                    v.Name,
-                    v.Id,
-                    v.Model.Type,
-                    Model = v.Value
-                });
-            }
-            return new OkObjectResult(a);
-        }
-
-        [HttpGet("command/templates")]
-        public IActionResult GetCommandTemplatates()
-        {
-            var a = new List<object>();
-            foreach (var node in _configuration.NodeConfigurations)
-            {
-                foreach (var device in node.DeviceConfigurations)
-                {
-                    if (device.CommandTemplates == null)
-                        continue;
-
-                    foreach (var t in device.CommandTemplates)
-                    {
-                        a.Add(new NodeCommandTemplate()
-                        {
-                            NodeId = node.Id,
-                            Node = node.Name,
-                            DeviceId = device.Id,
-                            Device = device.Name,
-                            Name = t.Name,
-                            Id = t.Id,
-                            Type = t.Type,
-                            Address = t.Address,
-                            Model = t.Model
-                        });
-                    }
-                }
-            }
-            return new OkObjectResult(a);
-        }
-
-        [HttpGet("{id}/device/templates")]
-        public async Task<IActionResult> GetOnlineDeviceConfigurationTemplatates(string id)
-        {
-            var template = await _onlineNodeService.LoadDeviceConfigurationTemplateAsync(id);
-            if(template != null && template.Count > 0)
-                return new OkObjectResult(template);
-
-            return new OkResult();
-        }
-
-        [HttpGet("variables")]
-        public IActionResult GetVariables()
-        {
-            var variableDTOs = new List<VariableDTO>();
-            foreach (var variable in _storedObjectService.GetAll<Variable>())
-                variableDTOs.Add(VariableDTO.ToVariableDTO(variable));
-       
-            return new OkObjectResult(variableDTOs);
-        }
-
-        [HttpPost("variable/save")]
-        public IActionResult SaveVariable([FromBody] VariableDTO variable)
-        {
-            //If variable is number validate it
-            if (variable.Type == Core.ValueType.Number) 
-            {
-                if (variable.Value.ToString().Contains('.'))
-                {
-                    if (double.TryParse(variable.Value.ToString(), out double d))
-                        variable.Value = d;
-                    else
-                        return BadRequest();
-                }
-                else 
-                {
-                    if (int.TryParse(variable.Value.ToString(), out int i))
-                        variable.Value = i;
-                    else
-                        return BadRequest();
-                }
-            }
-
-            if (!string.IsNullOrEmpty(_storedObjectService.Save(variable.ToVariable())))
-                return NoContent();
-            else
-                return Problem();
-        }
-
-        [HttpGet("variable/{id}/delete")]
-        [HttpDelete("/api/v2/variables/{id}")]
-        [DeprecatedGetAlias("DELETE /api/v2/variables/{id}")]
-        public IActionResult DeleteVariable(string id)
-        {
-            _storedObjectService.Delete<Variable>(id);
-            return NoContent();
-        }
-
 
         private NodeDeviceConfiguration WithCurrentStates(NodeDeviceConfiguration configuration)
         {

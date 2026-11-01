@@ -9,8 +9,6 @@ namespace RIoT2.Net.Orchestrator.Controllers
     [ApiController]
     public class ReportController : ControllerBase
     {
-        //TODO MOVE all report API to this ctrl
-
         private readonly IOrchestratorConfigurationService _configuration;
         private readonly IMessageStateService _messageStateService;
 
@@ -38,43 +36,6 @@ namespace RIoT2.Net.Orchestrator.Controllers
                     return NotFound($"Could not find report with ID: {id}");
             }
             return Content(Json.Serialize(report), "application/json");
-        }
-
-        /// <summary>
-        /// Retrieves all available report templates
-        /// </summary>
-        /// <returns>Return report templates with node and device data.</returns>
-        [HttpGet("templates")]
-        public IActionResult GetReportTemplates()
-        {
-            var a = new List<NodeReportTemplate>();
-            foreach (var node in _configuration.NodeConfigurations)
-            {
-                foreach (var device in node.DeviceConfigurations)
-                {
-                    if(device.ReportTemplates == null)
-                        continue;
-
-                    foreach (var t in device.ReportTemplates)
-                    {
-                        a.Add(new NodeReportTemplate
-                        {
-                            NodeId = node.Id,
-                            Node = node.Name,
-                            DeviceId = device.Id,
-                            Device = device.Name,
-                            Filters = t.Filters,
-                            Name = t.Name,
-                            Id = t.Id,
-                            Type = t.Type,
-                            Address = t.Address,
-                            Model = t.Model,
-                            MaintainHistory = t.MaintainHistory
-                        });
-                    }
-                }
-            }
-            return new OkObjectResult(a);
         }
     }
 }

@@ -28,7 +28,8 @@ How the orchestrator fits into the platform:
 | `Services/Persistence/FileObjectStore.cs` | File-backed JSON storage under `StoredObjects/` |
 | `Services/Backup/` | Configuration backup and restore, and the backup schedule (design 7.4) |
 | `Services/OrchestratorMetrics.cs` | The `RIoT2.Orchestrator` meter: reports, workflow deliveries, outbox, commands, nodes (design 7.4) |
-| `Services/Matter/` | Matter Control Bridge configuration, commissioning and endpoint bridging |
+| `Services/Templates/` | `ITemplateCatalog`, which shapes every REST template listing |
+| `Services/Matter/` | Matter Control Bridge: lifecycle, credentials, provisioning and bridged endpoints |
 | `CustomJsonSettings/` | Controller JSON settings (`OrchestratorJsonOptions`) and the optional `json-naming-policy` formatter profiles |
 | `openapi/riot2-orchestrator.json` | OpenAPI document of the REST routes, written by every build and committed |
 | `Protos/riot_trigger.proto` | gRPC workflow trigger client contract |
@@ -230,8 +231,7 @@ next to this one. Its [end-to-end tests](https://github.com/Revolutionized-IoT2/
 - To release, push a tag `x.y.z`. The release workflow validates, then pushes
   `ghcr.io/revolutionized-iot2/riot2-orchestrator:latest` and `:<tag>`. Every push runs CI
   ([CI guide](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/guides/ci.md)).
-- The project references the published packages `RIoT2.Core` `1.5.0`, `RIoT2.Matter` `1.0.0`
-  and `RIoT2.Matter.ControlBridge` `1.0.0`. To try unreleased versions, restore with
+- Package versions are in `Directory.Packages.props`. To try unreleased versions, restore with
   `C:\Src\RIoT2\.localfeed` as an extra source.
 
 ## Contributing

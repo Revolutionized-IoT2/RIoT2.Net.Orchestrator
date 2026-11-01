@@ -343,18 +343,6 @@
         }
       }
     },
-    "/api/Command/templates": {
-      "get": {
-        "tags": [
-          "Command"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
-      }
-    },
     "/api/Command/execute": {
       "post": {
         "tags": [
@@ -531,6 +519,38 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/Nodes/validatecron": {
+      "post": {
+        "tags": [
+          "Nodes"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CronValidationResult"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CronValidationResult"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CronValidationResult"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
           }
         }
       }
@@ -819,38 +839,6 @@
         }
       }
     },
-    "/api/Nodes/validatecron": {
-      "post": {
-        "tags": [
-          "Nodes"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CronValidationResult"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CronValidationResult"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/CronValidationResult"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
-      }
-    },
     "/api/Nodes/{id}/configuration": {
       "get": {
         "tags": [
@@ -917,6 +905,67 @@
         }
       }
     },
+    "/api/Nodes/configuration": {
+      "post": {
+        "tags": [
+          "Nodes"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v2/outbox/summary": {
+      "get": {
+        "tags": [
+          "Outbox"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutboxSummary"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutboxSummary"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutboxSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/Nodes/checkplugin": {
       "post": {
         "tags": [
@@ -949,31 +998,21 @@
         }
       }
     },
-    "/api/Nodes/configuration": {
-      "post": {
+    "/api/Report/{id}/value": {
+      "get": {
         "tags": [
-          "Nodes"
+          "Report"
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/JsonElement"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/JsonElement"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/JsonElement"
-              }
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
-          },
-          "required": true
-        },
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
@@ -1066,6 +1105,42 @@
         }
       }
     },
+    "/api/Report/templates": {
+      "get": {
+        "tags": [
+          "Report"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/Command/templates": {
+      "get": {
+        "tags": [
+          "Command"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/Variable/templates": {
+      "get": {
+        "tags": [
+          "Variable"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/Nodes/report/templates": {
       "get": {
         "tags": [
@@ -1136,6 +1211,28 @@
         }
       }
     },
+    "/api/Variable/{id}/value": {
+      "get": {
+        "tags": [
+          "Variable"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/Nodes/variable/save": {
       "post": {
         "tags": [
@@ -1194,103 +1291,6 @@
       "delete": {
         "tags": [
           "Nodes"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
-      }
-    },
-    "/api/v2/outbox/summary": {
-      "get": {
-        "tags": [
-          "Outbox"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OutboxSummary"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OutboxSummary"
-                }
-              },
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/OutboxSummary"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/Report/{id}/value": {
-      "get": {
-        "tags": [
-          "Report"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
-      }
-    },
-    "/api/Report/templates": {
-      "get": {
-        "tags": [
-          "Report"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
-      }
-    },
-    "/api/Variable/templates": {
-      "get": {
-        "tags": [
-          "Variable"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
-      }
-    },
-    "/api/Variable/{id}/value": {
-      "get": {
-        "tags": [
-          "Variable"
         ],
         "parameters": [
           {
@@ -1853,13 +1853,13 @@
       "name": "Commands"
     },
     {
+      "name": "Nodes"
+    },
+    {
       "name": "Dashboard"
     },
     {
       "name": "Matter"
-    },
-    {
-      "name": "Nodes"
     },
     {
       "name": "Outbox"

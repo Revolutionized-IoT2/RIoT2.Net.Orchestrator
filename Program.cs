@@ -11,6 +11,7 @@ using RIoT2.Net.Orchestrator.Services.Commands;
 using RIoT2.Net.Orchestrator.Services.Outbox;
 using RIoT2.Net.Orchestrator.Services.Matter;
 using RIoT2.Net.Orchestrator.Services.Persistence;
+using RIoT2.Net.Orchestrator.Services.Templates;
 using RIoT2.Core.Diagnostics;
 using RIoT2.Core.Hosting;
 using System.Text.Json;
@@ -63,6 +64,7 @@ builder.Services.AddSingleton<IOnlineNodeService, OnlineNodeService>();
 builder.Services.AddSingleton<StoredObjectService>();
 builder.Services.AddSingleton<IStoredObjectService>(s => s.GetRequiredService<StoredObjectService>());
 builder.Services.AddSingleton<IMessageStateService, MessageStateService>();
+builder.Services.AddSingleton<ITemplateCatalog, TemplateCatalog>();
 builder.Services.AddSingleton(TimeProvider.System);
 // Durable delivery (design 7.1): workflow triggers wait in StoredObjects/outbox.db until Elsa takes them.
 builder.Services.AddSingleton(s => OutboxStore.Open(s.GetRequiredService<IWebHostEnvironment>()));

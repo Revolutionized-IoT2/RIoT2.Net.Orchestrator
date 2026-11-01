@@ -1,7 +1,3 @@
-using System.Security.Cryptography;
-using System.Net.NetworkInformation;
-using System.Net.Sockets;
-using System.Text;
 using RIoT2.Core;
 using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Models;
@@ -10,10 +6,7 @@ using RIoT2.Matter.Clusters;
 using RIoT2.Matter.ControlBridge;
 using RIoT2.Matter.DataModel;
 using RIoT2.Matter.Device;
-using RIoT2.Matter.SecureChannel.Pase;
 using RIoT2.Net.Orchestrator.Models;
-using MatterNetworkInterface = RIoT2.Matter.Clusters.NetworkInterface;
-using SystemNetworkInterface = System.Net.NetworkInformation.NetworkInterface;
 
 namespace RIoT2.Net.Orchestrator.Services.Matter
 {
@@ -22,10 +15,19 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
     /// configuration, device state and node online state.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// The service owns the bridge's lifecycle and its persisted configuration and state; the work is
+    /// done by collaborators: <see cref="MatterCredentials"/> (credentials directory, fabric store key
+    /// and fabric table), <see cref="MatterProvisioning"/> (the onboarding bundle),
+    /// <see cref="MatterHostNetwork"/> (General Diagnostics interfaces) and
+    /// <see cref="MatterBridgedEndpoints"/> (endpoint composition, report routing and presence).
+    /// </para>
+    /// <para>
     /// One instance serves both <see cref="IMatterBridgeService"/> and <see cref="IMatterReportSink"/>.
     /// It deliberately resolves <see cref="IOrchestratorMqttService"/> from the service provider rather
     /// than taking it in the constructor: the MQTT service depends on the report sink, and two singletons
     /// cannot construct each other.
+    /// </para>
     /// </remarks>
     internal sealed class MatterBridgeService : IMatterBridgeService
     {
@@ -36,25 +38,18 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         private static readonly EndpointId AggregatorEndpoint = new(2);
 
         private const ushort CommissioningWindowSeconds = 900;
-        private const string FabricFileName = "fabrics.json";
 
         private readonly MatterConfigurationStore _store;
         private readonly IOrchestratorConfigurationService _configurationService;
-        private readonly IMessageStateService _messageState;
-        private readonly IOnlineNodeService _onlineNodes;
         private readonly IServiceProvider _services;
-        private readonly IWebHostEnvironment _environment;
         private readonly ILogger<MatterBridgeService> _logger;
+        private readonly MatterCredentials _credentials;
+        private readonly MatterBridgedEndpoints _endpoints;
 
         // Serialises start/stop/refresh: all of them add or remove bridged endpoints, and the UI can call
         // them while the hosted service is still starting the bridge.
         private readonly SemaphoreSlim _gate = new(1, 1);
         private int _disposed;
-
-        // Copied on read so OnReport can walk the adapters without holding the gate on the MQTT thread.
-        private volatile RiotBridgedDeviceAdapter[] _adapters = [];
-        private readonly object _presenceGate = new();
-        private readonly Dictionary<string, string> _adapterSignatures = new(StringComparer.Ordinal);
 
         private MatterConfiguration _configuration;
         private MatterBridgeState _state;
@@ -80,11 +75,10 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
 
             _store = store;
             _configurationService = configurationService;
-            _messageState = messageState;
-            _onlineNodes = onlineNodes;
             _services = services;
-            _environment = environment;
             _logger = logger;
+            _credentials = new MatterCredentials(environment.ContentRootPath, store);
+            _endpoints = new MatterBridgedEndpoints(configurationService, messageState, onlineNodes, store, SendCommandAsync, logger);
 
             _configuration = _store.LoadConfiguration();
             _state = _store.LoadState();
@@ -97,32 +91,12 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         public MatterConfiguration Configuration => _configuration.Copy();
 
         /// <inheritdoc />
-        public async Task StartAsync(CancellationToken cancellationToken = default)
-        {
-            await _gate.WaitAsync(cancellationToken);
-            try
-            {
-                await StartCoreAsync(cancellationToken);
-            }
-            finally
-            {
-                _gate.Release();
-            }
-        }
+        public Task StartAsync(CancellationToken cancellationToken = default) =>
+            WithGateAsync(() => StartCoreAsync(cancellationToken), cancellationToken);
 
         /// <inheritdoc />
-        public async Task StopAsync(CancellationToken cancellationToken = default)
-        {
-            await _gate.WaitAsync(cancellationToken);
-            try
-            {
-                await StopCoreAsync();
-            }
-            finally
-            {
-                _gate.Release();
-            }
-        }
+        public Task StopAsync(CancellationToken cancellationToken = default) =>
+            WithGateAsync(StopCoreAsync, cancellationToken);
 
         /// <inheritdoc />
         public async Task SaveConfigurationAsync(MatterConfiguration configuration, CancellationToken cancellationToken = default)
@@ -131,10 +105,9 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
 
             // Validate before persisting: this value controls where the bridge writes generated
             // credentials and deletes its fabric store during reset.
-            ResolveCredentialsDirectory(configuration.CredentialsDirectory);
+            _credentials.ResolveDirectory(configuration.CredentialsDirectory);
 
-            await _gate.WaitAsync(cancellationToken);
-            try
+            await WithGateAsync(async () =>
             {
                 // The fabric store key is never taken from the caller: changing it silently orphans every
                 // commissioned fabric, so it stays whatever was generated on the first run.
@@ -146,29 +119,12 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
                 // Every configured value is baked into the composed node, so a running bridge is rebuilt.
                 await StopCoreAsync();
                 await StartCoreAsync(cancellationToken);
-            }
-            finally
-            {
-                _gate.Release();
-            }
+            }, cancellationToken);
         }
 
         /// <inheritdoc />
-        public async Task RefreshDevicesAsync(CancellationToken cancellationToken = default)
-        {
-            await _gate.WaitAsync(cancellationToken);
-            try
-            {
-                if (_bridge is null)
-                    return;
-
-                await AddDevicesAsync(cancellationToken);
-            }
-            finally
-            {
-                _gate.Release();
-            }
-        }
+        public Task RefreshDevicesAsync(CancellationToken cancellationToken = default) =>
+            WithGateAsync(() => AddDevicesAsync(cancellationToken), cancellationToken);
 
         /// <inheritdoc />
         public void OpenCommissioningWindow()
@@ -188,8 +144,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         {
             ArgumentNullException.ThrowIfNull(action);
 
-            await _gate.WaitAsync(cancellationToken);
-            try
+            await WithGateAsync(async () =>
             {
                 await StopCoreAsync();
                 try
@@ -203,40 +158,24 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
                     _state = _store.LoadState();
                     await StartCoreAsync(CancellationToken.None);
                 }
-            }
-            finally
-            {
-                _gate.Release();
-            }
+            }, cancellationToken);
         }
 
         /// <inheritdoc />
-        public async Task ResetAsync(CancellationToken cancellationToken = default)
-        {
-            await _gate.WaitAsync(cancellationToken);
-            try
+        public Task ResetAsync(CancellationToken cancellationToken = default) =>
+            WithGateAsync(async () =>
             {
                 await StopCoreAsync();
 
                 // Drop both halves of the identity: the fabrics a controller commissioned, and the
                 // provisioning bundle behind the onboarding codes. The endpoint map goes with them, since
                 // a fresh pairing has no device references to keep stable.
-                var fabricFile = Path.Combine(ResolveCredentialsDirectory(_configuration.CredentialsDirectory), FabricFileName);
-                if (File.Exists(fabricFile))
-                {
-                    File.Delete(fabricFile);
-                }
-
+                _credentials.DeleteFabrics(_configuration);
                 _store.DeleteState();
                 _state = new MatterBridgeState();
 
                 await StartCoreAsync(cancellationToken);
-            }
-            finally
-            {
-                _gate.Release();
-            }
-        }
+            }, cancellationToken);
 
         /// <inheritdoc />
         public MatterStatus GetStatus()
@@ -274,59 +213,20 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
                 });
             }
 
-            foreach (var adapter in _adapters)
-            {
-                if (adapter.Device is null)
-                    continue;
-
-                status.Endpoints.Add(new MatterEndpointStatus
-                {
-                    EndpointId = adapter.Device.EndpointId.Value,
-                    TemplateId = adapter.Template.Id,
-                    Name = adapter.Template.Name,
-                    DeviceType = adapter.Template.DeviceType.ToString(),
-                    NodeId = adapter.NodeId,
-                    DeviceId = adapter.DeviceId,
-                    Reachable = adapter.Device.Reachable
-                });
-            }
-
+            status.Endpoints.AddRange(_endpoints.GetStatus());
             return status;
         }
 
         /// <inheritdoc />
-        public void OnReport(Report report)
-        {
-            // Called from the MQTT consumer for every report the orchestrator handles, so it must never
-            // throw and must not block: each adapter ignores reports that are not bound to it.
-            foreach (var adapter in _adapters)
-            {
-                try
-                {
-                    adapter.OnReport(report);
-                }
-                catch (Exception x)
-                {
-                    _logger?.LogError(x, "Matter endpoint {Endpoint} could not handle report {ReportId}",
-                        adapter.Template.Id, report?.Id);
-                }
-            }
-        }
+        /// <remarks>
+        /// Called from the MQTT consumer for every report the orchestrator handles, so it never throws
+        /// and does not block.
+        /// </remarks>
+        public void OnReport(Report report) => _endpoints.RouteReport(report);
 
         public Task OnConfigurationChangedAsync() => RefreshDevicesAsync();
 
-        public void OnNodeOnlineChanged(string nodeId, bool isOnline)
-        {
-            lock (_presenceGate)
-                foreach (var adapter in _adapters.Where(a => a.NodeId == nodeId))
-                {
-                    try { adapter.SetReachable(isOnline); }
-                    catch (Exception x)
-                    {
-                        _logger?.LogError(x, "Matter endpoint {Endpoint} could not update reachability", adapter.Template.Id);
-                    }
-                }
-        }
+        public void OnNodeOnlineChanged(string nodeId, bool isOnline) => _endpoints.SetReachable(nodeId, isOnline);
 
         /// <inheritdoc />
         public async ValueTask DisposeAsync()
@@ -348,6 +248,23 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
             }
         }
 
+        /// <summary>Reconciles the bridged endpoints of <paramref name="aggregator"/> with the configuration.</summary>
+        internal Task ReconcileDevicesAsync(RIoT2.Matter.ControlBridge.AggregatorEndpoint aggregator, CancellationToken cancellationToken = default) =>
+            _endpoints.ReconcileAsync(aggregator, _state, cancellationToken);
+
+        private async Task WithGateAsync(Func<Task> action, CancellationToken cancellationToken)
+        {
+            await _gate.WaitAsync(cancellationToken);
+            try
+            {
+                await action();
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
         private async Task StartCoreAsync(CancellationToken cancellationToken)
         {
             if (_bridge is not null)
@@ -364,16 +281,10 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
 
             try
             {
-                var credentialsDirectory = ResolveCredentialsDirectory(_configuration.CredentialsDirectory);
-                Directory.CreateDirectory(credentialsDirectory);
+                var credentialsDirectory = _credentials.Prepare(_configuration);
 
-                // Generated once and then left alone: it seals the persisted fabric table, so replacing it
-                // would make every commissioned fabric unreadable.
-                if (string.IsNullOrEmpty(_configuration.FabricStoreKey))
-                {
-                    _configuration.FabricStoreKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-                    _store.SaveConfiguration(_configuration);
-                }
+                if (MatterProvisioning.Resolve(_state, _logger, out var provisioning))
+                    _store.SaveState(_state);
 
                 var settings = new ControlBridgeSettings
                 {
@@ -388,13 +299,13 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
                         SerialNumber = _configurationService.OrchestratorConfiguration?.Id
                     },
                     Attestation = MatterAttestationProvider.Create(_configuration, credentialsDirectory, _logger),
-                    NetworkInterfaces = EnumerateNetworkInterfaces(),
+                    NetworkInterfaces = MatterHostNetwork.EnumerateInterfaces(_logger),
                     Discriminator = _configuration.Discriminator,
                     NodeLabel = _configuration.NodeLabel,
                     ControlEndpoint = ControlEndpoint,
                     AggregatorEndpoint = AggregatorEndpoint,
                     CommissioningWindowSeconds = CommissioningWindowSeconds,
-                    Provisioning = ResolveProvisioning()
+                    Provisioning = provisioning
                 };
 
                 var bridge = ControlBridgeService.Create(settings);
@@ -403,7 +314,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
                 // whether to open a commissioning window for an uncommissioned node.
                 _fabricPersistence = FileFabricPersistence.Attach(
                     bridge.Device.Commissioning.Manager,
-                    Path.Combine(credentialsDirectory, FabricFileName),
+                    _credentials.FabricFile(_configuration),
                     _configuration.FabricStoreKey);
 
                 await bridge.StartAsync(cancellationToken);
@@ -425,7 +336,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
 
         private async Task StopCoreAsync()
         {
-            await RemoveDevicesAsync(CancellationToken.None);
+            await _endpoints.RemoveAllAsync(_bridge?.Aggregator, CancellationToken.None);
 
             if (_bridge is not null)
             {
@@ -448,154 +359,6 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         private Task AddDevicesAsync(CancellationToken cancellationToken) =>
             _bridge?.Aggregator is { } aggregator ? ReconcileDevicesAsync(aggregator, cancellationToken) : Task.CompletedTask;
 
-        internal async Task ReconcileDevicesAsync(RIoT2.Matter.ControlBridge.AggregatorEndpoint bridge, CancellationToken cancellationToken = default)
-        {
-            ArgumentNullException.ThrowIfNull(bridge);
-
-            var online = _onlineNodes.OnlineNodes.Where(n => n.OnlineNodeSettings?.IsOnline == true)
-                .Select(n => n.Id).ToHashSet(StringComparer.Ordinal);
-            var desired = new Dictionary<string, (string NodeId, DeviceConfiguration Device, MatterEndpointTemplate Template, string Signature)>(StringComparer.Ordinal);
-            foreach (var node in _configurationService.NodeConfigurations ?? [])
-                foreach (var device in node.DeviceConfigurations ?? [])
-                    foreach (var template in device.MatterEndpoints ?? [])
-                    {
-                        if (string.IsNullOrEmpty(template?.Id))
-                            continue;
-                        var key = EndpointKey(device.Id, template.Id);
-                        var signature = Core.Utils.Json.SerializeIgnoreNulls(new { NodeId = node.Id, device.Name, Template = template });
-                        if (!desired.TryAdd(key, (node.Id, device, template, signature)))
-                            throw new InvalidOperationException($"Duplicate Matter endpoint declaration: {key}.");
-                    }
-
-            var adapters = _adapters.ToList();
-            var mapChanged = false;
-            try
-            {
-                foreach (var adapter in adapters.ToArray())
-                {
-                    var key = EndpointKey(adapter.DeviceId, adapter.Template.Id);
-                    if (desired.TryGetValue(key, out var definition) &&
-                        _adapterSignatures.TryGetValue(key, out var signature) && signature == definition.Signature)
-                        continue;
-                    try
-                    {
-                        await bridge.RemoveBridgedDeviceAsync(adapter.Device, cancellationToken);
-                        adapters.Remove(adapter);
-                        _adapterSignatures.Remove(key);
-                    }
-                    catch (Exception x) when (x is not OperationCanceledException)
-                    {
-                        _logger?.LogError(x, "Matter endpoint {Endpoint} could not be removed during reconciliation", adapter.Template.Id);
-                    }
-                }
-
-                foreach (var (key, definition) in desired)
-                {
-                    if (adapters.Any(a => EndpointKey(a.DeviceId, a.Template.Id) == key))
-                        continue;
-                    try
-                    {
-                        var adapter = await AddDeviceAsync(bridge, definition.NodeId, definition.Device, definition.Template, online, cancellationToken);
-                        adapters.Add(adapter);
-                        _adapterSignatures[key] = definition.Signature;
-                        var assigned = adapter.Device.EndpointId.Value;
-                        if (!_state.EndpointMap.TryGetValue(key, out var known) || known != assigned)
-                        {
-                            _state.EndpointMap[key] = assigned;
-                            mapChanged = true;
-                        }
-                    }
-                    catch (Exception x) when (x is not OperationCanceledException)
-                    {
-                        _logger?.LogError(x, "Matter endpoint {Endpoint} of device {DeviceId} could not be bridged",
-                            definition.Template.Id, definition.Device.Id);
-                    }
-                }
-            }
-            finally
-            {
-                lock (_presenceGate)
-                {
-                    _adapters = [.. adapters];
-                    var latestOnline = _onlineNodes.OnlineNodes.Where(n => n.OnlineNodeSettings?.IsOnline == true)
-                        .Select(n => n.Id).ToHashSet(StringComparer.Ordinal);
-                    foreach (var adapter in _adapters)
-                        adapter.SetReachable(latestOnline.Contains(adapter.NodeId));
-                }
-                if (mapChanged)
-                    _store.SaveState(_state);
-            }
-
-            _logger?.LogInformation("Matter bridge exposes {Count} bridged endpoint(s)", adapters.Count);
-        }
-
-        private async Task<RiotBridgedDeviceAdapter> AddDeviceAsync(
-            RIoT2.Matter.ControlBridge.AggregatorEndpoint bridge,
-            string nodeId,
-            DeviceConfiguration device,
-            MatterEndpointTemplate template,
-            HashSet<string> onlineNodes,
-            CancellationToken cancellationToken)
-        {
-            var reachable = !string.IsNullOrEmpty(nodeId) && onlineNodes.Contains(nodeId);
-            var key = EndpointKey(device.Id, template.Id);
-
-            var adapter = new RiotBridgedDeviceAdapter(
-                template,
-                nodeId,
-                device.Id,
-                () => _messageState.Reports,
-                SendCommandAsync,
-                _logger);
-
-            var definition = new BridgedDeviceDefinition
-            {
-                DeviceType = MatterEndpointComposer.Resolve(template.DeviceType),
-                ComposeApplicationClusters = MatterEndpointComposer.CreateComposer(template.DeviceType),
-                NodeLabel = string.IsNullOrEmpty(template.Name) ? device.Name : template.Name,
-                Reachable = reachable,
-                Information = new BridgedDeviceInformation
-                {
-                    VendorName = string.IsNullOrEmpty(template.VendorName) ? "RIoT2" : template.VendorName,
-                    ProductName = string.IsNullOrEmpty(template.ProductName) ? device.Name : template.ProductName,
-                    UniqueId = UniqueId(key)
-                }
-            };
-
-            // A known endpoint id is offered back to the aggregator so a controller keeps pointing at the
-            // same device across restarts; an unknown one is allocated sequentially.
-            EndpointId? preferred = _state.EndpointMap.TryGetValue(key, out var mapped) ? new EndpointId(mapped) : null;
-
-            await bridge.AddBridgedDeviceAsync(definition, adapter, preferred, cancellationToken);
-            return adapter;
-        }
-
-        private async Task RemoveDevicesAsync(CancellationToken cancellationToken)
-        {
-            var bridge = _bridge;
-            var adapters = _adapters;
-            _adapters = [];
-            _adapterSignatures.Clear();
-
-            if (bridge is null)
-                return;
-
-            foreach (var adapter in adapters)
-            {
-                if (adapter.Device is null)
-                    continue;
-
-                try
-                {
-                    await bridge.RemoveBridgedDeviceAsync(adapter.Device, cancellationToken);
-                }
-                catch (Exception x)
-                {
-                    _logger?.LogError(x, "Matter endpoint {Endpoint} could not be removed", adapter.Template.Id);
-                }
-            }
-        }
-
         /// <summary>
         /// Sends the RIoT command a controller-driven attribute change produced, reusing the orchestrator's
         /// own output path so node resolution, command state and MQTT publishing behave exactly as for a rule.
@@ -615,141 +378,5 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
                 Value = value
             });
         }
-
-        /// <summary>
-        /// Restores the provisioning bundle behind the onboarding codes, or mints and persists a new one.
-        /// </summary>
-        /// <remarks>
-        /// The verifier is re-derived rather than stored: it is a deterministic function of the passcode
-        /// and the PBKDF parameters. Re-provisioning instead of restoring would change the passcode and
-        /// invalidate any QR code the user has already been shown.
-        /// </remarks>
-        private PaseProvisioning ResolveProvisioning()
-        {
-            if (_state.Passcode != 0 && _state.PbkdfIterations != 0 && !string.IsNullOrEmpty(_state.PbkdfSalt))
-            {
-                try
-                {
-                    var restored = new SetupPasscode(_state.Passcode);
-                    var parameters = new PbkdfParameters(_state.PbkdfIterations, Convert.FromBase64String(_state.PbkdfSalt));
-                    return new PaseProvisioning(restored, parameters, PaseVerifierGenerator.GenerateVerifier(restored, parameters));
-                }
-                catch (Exception x)
-                {
-                    _logger?.LogError(x, "The stored Matter provisioning bundle is unusable; provisioning a new one");
-                }
-            }
-
-            var provisioning = PaseVerifierGenerator.Provision();
-            _state.Passcode = provisioning.Passcode.Value;
-            _state.PbkdfIterations = provisioning.Parameters.Iterations;
-            _state.PbkdfSalt = Convert.ToBase64String(provisioning.Parameters.Salt);
-            _store.SaveState(_state);
-
-            return provisioning;
-        }
-
-        private string ResolveCredentialsDirectory(string configuredDirectory) =>
-            ResolveCredentialsDirectory(_environment.ContentRootPath, configuredDirectory);
-
-        /// <summary>
-        /// The full path of the configured credentials directory, which must be relative to and stay
-        /// under <paramref name="contentRoot"/>; empty means <c>MatterCredentials</c>.
-        /// </summary>
-        internal static string ResolveCredentialsDirectory(string contentRoot, string configuredDirectory)
-        {
-            var directory = string.IsNullOrWhiteSpace(configuredDirectory)
-                ? "MatterCredentials"
-                : configuredDirectory;
-
-            if (Path.IsPathRooted(directory))
-                throw new ArgumentException("Matter credentials directory must be relative to the orchestrator content root.", nameof(configuredDirectory));
-
-            contentRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(contentRoot));
-            var fullPath = Path.GetFullPath(Path.Combine(contentRoot, directory));
-            var normalizedRoot = contentRoot.EndsWith(Path.DirectorySeparatorChar)
-                ? contentRoot
-                : contentRoot + Path.DirectorySeparatorChar;
-
-            if (!fullPath.Equals(contentRoot, StringComparison.OrdinalIgnoreCase) &&
-                !fullPath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new ArgumentException("Matter credentials directory must stay under the orchestrator content root.", nameof(configuredDirectory));
-            }
-
-            return fullPath;
-        }
-
-        private static string EndpointKey(string deviceId, string templateId) => $"{deviceId}:{templateId}";
-
-        /// <summary>
-        /// Derives the Bridged Device Basic Information UniqueId, which the specification limits to 32
-        /// characters, from the endpoint key.
-        /// </summary>
-        private static string UniqueId(string key)
-        {
-            if (key.Length <= 32)
-                return key;
-
-            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
-            return Convert.ToHexString(hash)[..32];
-        }
-
-        /// <summary>
-        /// Reports the host's operational interfaces to General Diagnostics. Matter is IPv6-centric, so an
-        /// interface without an IPv6 address is of no use to a commissioner and is left out.
-        /// </summary>
-        private IReadOnlyList<MatterNetworkInterface> EnumerateNetworkInterfaces()
-        {
-            var interfaces = new List<MatterNetworkInterface>();
-
-            foreach (var nic in SystemNetworkInterface.GetAllNetworkInterfaces())
-            {
-                if (nic.OperationalStatus != OperationalStatus.Up || nic.NetworkInterfaceType == NetworkInterfaceType.Loopback)
-                    continue;
-
-                var addresses = nic.GetIPProperties().UnicastAddresses;
-                var ipv6 = addresses
-                    .Where(a => a.Address.AddressFamily == AddressFamily.InterNetworkV6)
-                    .Select(a => a.Address.GetAddressBytes())
-                    .ToList();
-
-                if (ipv6.Count == 0)
-                    continue;
-
-                var ipv4 = addresses
-                    .Where(a => a.Address.AddressFamily == AddressFamily.InterNetwork)
-                    .Select(a => a.Address.GetAddressBytes())
-                    .ToList();
-
-                interfaces.Add(new MatterNetworkInterface
-                {
-                    // The cluster limits the name to 32 characters; a Windows adapter name easily exceeds that.
-                    Name = nic.Name.Length > 32 ? nic.Name[..32] : nic.Name,
-                    IsOperational = true,
-                    Type = MapInterfaceType(nic.NetworkInterfaceType),
-                    HardwareAddress = nic.GetPhysicalAddress().GetAddressBytes(),
-                    IPv4Addresses = ipv4,
-                    IPv6Addresses = ipv6
-                });
-            }
-
-            if (interfaces.Count == 0)
-            {
-                _logger?.LogWarning(
-                    "No operational IPv6 interface was found. Matter requires IPv6; a commissioner will not discover the bridge.");
-            }
-
-            return interfaces;
-        }
-
-        private static InterfaceType MapInterfaceType(NetworkInterfaceType type) => type switch
-        {
-            NetworkInterfaceType.Ethernet or NetworkInterfaceType.GigabitEthernet or NetworkInterfaceType.FastEthernetT
-                or NetworkInterfaceType.FastEthernetFx => InterfaceType.Ethernet,
-            NetworkInterfaceType.Wireless80211 => InterfaceType.WiFi,
-            NetworkInterfaceType.Wman or NetworkInterfaceType.Wwanpp or NetworkInterfaceType.Wwanpp2 => InterfaceType.Cellular,
-            _ => InterfaceType.Unspecified
-        };
     }
 }

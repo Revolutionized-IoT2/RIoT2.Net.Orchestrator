@@ -226,7 +226,7 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
         {
             try
             {
-                var directory = MatterBridgeService.ResolveCredentialsDirectory(contentRoot, configured);
+                var directory = MatterCredentials.ResolveDirectory(contentRoot, configured);
                 var relative = Path.GetRelativePath(contentRoot, directory);
                 var first = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
                 if (relative == "." || ReservedFolders.Contains(first, StringComparer.OrdinalIgnoreCase))
@@ -304,7 +304,7 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
         }
 
         private string CredentialsDirectory() =>
-            MatterBridgeService.ResolveCredentialsDirectory(_contentRoot, _matterStore.LoadConfiguration().CredentialsDirectory);
+            MatterCredentials.ResolveDirectory(_contentRoot, _matterStore.LoadConfiguration().CredentialsDirectory);
 
         private string Save(string name, byte[] content)
         {

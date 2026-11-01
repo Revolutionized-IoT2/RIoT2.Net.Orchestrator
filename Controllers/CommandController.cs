@@ -42,41 +42,6 @@ namespace RIoT2.Net.Orchestrator.Controllers
         }
 
         /// <summary>
-        /// Retrieves all available command templates
-        /// </summary>
-        /// <returns>Command templates with Node and device data</returns>
-        [HttpGet("templates")]
-        public IActionResult GetCommandTemplates()
-        {
-            var a = new List<NodeCommandTemplate>();
-            foreach (var node in _configuration.NodeConfigurations)
-            {
-                foreach (var device in node.DeviceConfigurations)
-                {
-                    if(device.CommandTemplates == null)
-                        continue;
-
-                    foreach (var t in device.CommandTemplates)
-                    {
-                        a.Add(new NodeCommandTemplate
-                        {
-                            NodeId = node.Id,
-                            Node = node.Name,
-                            DeviceId = device.Id,
-                            Device = device.Name,
-                            Name =  t.Name,
-                            Id =  t.Id,
-                            Type =  t.Type,
-                            Address =  t.Address,
-                            Model =  t.Model
-                        });
-                    }
-                }
-            }
-            return new OkObjectResult(a);
-        }
-
-        /// <summary>
         /// Executes a posted command or returns BadRequest if the command is invalid or ID is missing or not found.
         /// </summary>
         /// <returns>OK if the command was executed successfully, otherwise BadRequest.</returns>

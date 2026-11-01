@@ -57,11 +57,12 @@ must keep them passing.
 | Path | Contents |
 |---|---|
 | `Program.cs` | ASP.NET Core host, logging (`AddRIoT2Logging()`), CORS, JSON profiles, DI, health checks and hosted services |
-| `Controllers/` | Anonymous REST controllers for nodes, templates, state, dashboard, variables, commands (`api/v2/commands`), reports, Matter and the outbox (`api/v2/outbox`); `DeprecatedGetAliasAttribute` marks the old state-changing `GET` routes |
+| `Controllers/` | Anonymous REST controllers, one per resource (I23): nodes, templates, state, variables, plugin and cron checks, dashboard, reports, commands (`api/v2/commands`), Matter, backup and the outbox. Moved actions keep their paths and OpenAPI tags (explicit routes, `[Tags]`). `DeprecatedGetAliasAttribute` marks the old state-changing `GET` routes |
 | `CustomJsonSettings/` | `OrchestratorJsonOptions` (controller JSON settings) and the `json-naming-policy: pascal\|lower` MVC formatter profiles |
 | `openapi/riot2-orchestrator.json` | Generated OpenAPI document (the REST route contract), committed |
 | `Services/OrchestratorOptions.cs` | Every `RIOT2_*` setting the orchestrator reads, validated at startup with Core's `SettingsReader` |
 | `Services/OrchestratorConfigurationService.cs` | Settings from `IOptions<OrchestratorOptions>`, stored node/dashboard configuration and template lookup |
+| `Services/Templates/` | `ITemplateCatalog`: the only place that shapes the REST template listings |
 | `Services/OrchestratorMqttService.cs` | MQTT subscriptions/publications, state updates, Matter report mirroring; reports and presence go to `IAutomationProvider`, commands, results and presence to `ICommandOutbox`; it is the outbox's `ICommandTransport` |
 | `Services/Commands/` | `CommandOutbox` (one `OutboxDispatcher` per node, result waiting, late results) and `CommandDelivery` (the v2 status) |
 | `Services/Automation/` | `IAutomationProvider` (ADR 0008) and `ElsaAutomationProvider`, which stores triggers in the outbox and runs their dispatcher as a hosted service |
@@ -69,7 +70,7 @@ must keep them passing.
 | `Services/Persistence/` | File-backed `StoredObjects/<Type>/<Id>.json` object store; `IObjectStoreArchive` exports and replaces it all |
 | `Services/OrchestratorMetrics.cs` | Meter `RIoT2.Orchestrator` (design 7.4); names in the hub's `contracts/metrics.md`, pinned by RIoT2.Tests |
 | `Services/Backup/` | Configuration backup and restore (design 7.4): `BackupArchive` (zip and manifest validation), `BackupService`, `BackupScheduler` (`RIOT2_BACKUP_SCHEDULE`) |
-| `Services/Matter/` | Matter Control Bridge configuration, endpoint composition, commissioning and report/command bridging |
+| `Services/Matter/` | `MatterBridgeService` (lifecycle) with `MatterCredentials`, `MatterProvisioning`, `MatterHostNetwork` and `MatterBridgedEndpoints` (endpoints, reports, reachability) |
 | `Services/WorkflowTriggerClient.cs` | Reused gRPC client/channel with a five-second workflow trigger deadline; used only by `ElsaAutomationProvider` |
 | `Protos/riot_trigger.proto` | gRPC trigger contract, kept in lockstep with Elsa's `riot.proto` |
 | `Dockerfile` | .NET 10 multi-stage image; runtime is Alpine, non-root, HTTP port 8080 |
@@ -117,9 +118,10 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   `Json.SerializeIgnoreNulls` for wire payloads that use Core models.
 - Keep `RIoT2.Core`, `RIoT2.Matter` and `RIoT2.Matter.ControlBridge` as package references. The
   Dockerfile restores from GitHub Packages and cannot see project references.
-- Current package pins are `RIoT2.Core` and `RIoT2.Core.Hosting` `1.9.0`, `RIoT2.Matter` `1.0.0` and
-  `RIoT2.Matter.ControlBridge` `1.0.0`, all published. Use `C:\Src\RIoT2\.localfeed` as an extra
-  NuGet source only to try unreleased versions.
+- Package pins: `RIoT2.Core` and `RIoT2.Core.Hosting` `1.10.0`, `RIoT2.Matter` and
+  `RIoT2.Matter.ControlBridge` `1.0.0`, and the transitive `System.Security.Cryptography.Pkcs`
+  `10.0.14` (drop it once RIoT2.Matter brings a patched one). Use `C:\Src\RIoT2\.localfeed` only to
+  try unreleased versions.
 - Keep `PackageReference` items versionless; package versions belong in `Directory.Packages.props`.
 - `FileObjectStore` must validate type names and ids as file names. Never build persistence paths
   from raw ids.
@@ -195,8 +197,6 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
 ## Related work
 
 - [Backlog items](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md) 2, 7, 13, 14, 17 and 18.
-- Maintainer action
-  [MA2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/README.md#ma2-cut-a-core-release-and-align-all-consumers).
 - [Plans](https://github.com/Revolutionized-IoT2/.github/tree/main/docs/plans) M2, M3, M4, M7 and M8.
 - Designs
   [7.1](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/reliable-delivery.md),
