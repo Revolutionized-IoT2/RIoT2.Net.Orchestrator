@@ -1,7 +1,5 @@
 using Microsoft.Extensions.Options;
-using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Models;
-using RIoT2.Core.Services;
 using RIoT2.Net.Orchestrator.Controllers;
 using RIoT2.Net.Orchestrator.CustomJsonSettings;
 using RIoT2.Net.Orchestrator.Services;

@@ -118,7 +118,7 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   `Json.SerializeIgnoreNulls` for wire payloads that use Core models.
 - Keep `RIoT2.Core`, `RIoT2.Matter` and `RIoT2.Matter.ControlBridge` as package references. The
   Dockerfile restores from GitHub Packages and cannot see project references.
-- Package pins: `RIoT2.Core` and `RIoT2.Core.Hosting` `1.12.0`, `RIoT2.Matter` and
+- Package pins: `RIoT2.Core` and `RIoT2.Core.Hosting` `1.13.0`, `RIoT2.Matter` and
   `RIoT2.Matter.ControlBridge` `1.0.0`, and the transitive `System.Security.Cryptography.Pkcs`
   `10.0.14` (drop it once RIoT2.Matter brings a patched one). Use `C:\Src\RIoT2\.localfeed` only to
   try unreleased versions.

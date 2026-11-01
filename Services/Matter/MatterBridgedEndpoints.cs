@@ -1,12 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
-using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Models;
 using RIoT2.Core.Models.Matter;
 using RIoT2.Matter.Clusters;
 using RIoT2.Matter.ControlBridge;
 using RIoT2.Matter.DataModel;
 using RIoT2.Net.Orchestrator.Models;
+using RIoT2.Net.Orchestrator.Services;
 
 namespace RIoT2.Net.Orchestrator.Services.Matter
 {

@@ -1,5 +1,4 @@
-﻿using RIoT2.Core.Interfaces.Services;
-
+﻿
 namespace RIoT2.Net.Orchestrator.Services
 {
     internal class MqttBackgroundService : IHostedService, IDisposable

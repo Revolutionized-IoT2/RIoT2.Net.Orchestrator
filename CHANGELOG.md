@@ -5,6 +5,17 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-11-01
+
+Core package split ([I27](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i27-core-package-split-m)), with RIoT2.Core 1.13.0. No route, port, user, volume or JSON
+changes.
+
+- Changed: `IOrchestratorConfigurationService`, `IOrchestratorMqttService`, `IMessageStateService`
+  and `MessageStateService` are the orchestrator's own (namespace `RIoT2.Net.Orchestrator.Services`);
+  RIoT2.Core's copies are `[Obsolete]` (plan M1 step 1).
+- Changed: RIoT2.Core and RIoT2.Core.Hosting 1.13.0; the orchestrator still references the
+  `RIoT2.Core` facade (narrower references are I28).
+
 ## [1.11.0] - 2026-11-01
 
 Typed persistence ([I26](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i26-typed-persistence-m), plan M2 steps 4–5), with RIoT2.Core 1.12.0. No route, port,

@@ -1,6 +1,5 @@
 ﻿using System.Collections.Concurrent;
 using RIoT2.Core;
-using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Models;
 using RIoT2.Core.Utils;
 using RIoT2.Net.Orchestrator.Models;

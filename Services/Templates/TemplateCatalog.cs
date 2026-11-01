@@ -1,7 +1,7 @@
-using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Models;
 using RIoT2.Net.Orchestrator.Models;
 using RIoT2.Net.Orchestrator.Services.Persistence;
+using RIoT2.Net.Orchestrator.Services;
 
 namespace RIoT2.Net.Orchestrator.Services.Templates
 {

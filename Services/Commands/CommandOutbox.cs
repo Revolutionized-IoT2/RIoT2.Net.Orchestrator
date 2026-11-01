@@ -1,11 +1,11 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Options;
 using RIoT2.Core;
-using RIoT2.Core.Interfaces.Services;
 using RIoT2.Core.Models;
 using RIoT2.Core.Utils;
 using RIoT2.Net.Orchestrator.Models;
 using RIoT2.Net.Orchestrator.Services.Outbox;
+using RIoT2.Net.Orchestrator.Services;
 
 namespace RIoT2.Net.Orchestrator.Services.Commands
 {
