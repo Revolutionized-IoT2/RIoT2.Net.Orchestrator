@@ -184,12 +184,14 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
             {
                 case DeliveryOutcome.Delivered:
                     _store.Complete(message.Id, OutboxStatus.Done, now, result.Result);
+                    OrchestratorMetrics.Delivery(message, result.Result ?? "delivered", now);
                     if (message.Attempts > 0)
                         _logger.LogInformation("{Description} {MessageId} for {Subject} delivered to {Target} after {Attempts} failed attempts",
                             Capitalize(_description), message.Id, message.Subject, _target, message.Attempts);
                     break;
                 case DeliveryOutcome.Failed:
                     _store.Complete(message.Id, OutboxStatus.Failed, now, result.Result, result.Detail);
+                    OrchestratorMetrics.Delivery(message, result.Result ?? "failed", now);
                     _logger.LogError("{Description} {MessageId} for {Subject} was rejected by {Target} and is not retried: {Error}",
                         Capitalize(_description), message.Id, message.Subject, _target, result.Detail);
                     break;
@@ -197,6 +199,7 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
                     var attempts = message.Attempts + 1;
                     var delay = Backoff(attempts);
                     _store.ScheduleRetry(message.Id, attempts, now + (long)delay.TotalMilliseconds, now, result.Detail);
+                    OrchestratorMetrics.Delivery(message, OrchestratorMetrics.Retry, now);
                     _logger.LogWarning("{Description} {MessageId} for {Subject} could not be delivered to {Target} (attempt {Attempts}); retrying in {Delay} s: {Error}",
                         Capitalize(_description), message.Id, message.Subject, _target, attempts, delay.TotalSeconds, result.Detail);
                     break;
@@ -207,6 +210,8 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
         private void Expire(long now)
         {
             var expired = _store.ExpireDue(_target, now);
+            foreach (var message in expired)
+                OrchestratorMetrics.Delivery(message, OutboxStatus.Expired, now);
             if (expired.Count > 0)
             {
                 _unloggedExpired += expired.Count;

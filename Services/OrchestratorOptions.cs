@@ -25,6 +25,9 @@ namespace RIoT2.Net.Orchestrator.Services
         /// <summary><c>RIOT2_LOG_FORMAT</c> and <c>RIOT2_LOG_LEVEL</c>, applied by <c>AddRIoT2Logging()</c> (design 7.4).</summary>
         public LoggingOptions Logging { get; set; } = new();
 
+        /// <summary><c>OTEL_EXPORTER_OTLP_ENDPOINT</c> and <c>RIOT2_TRACING</c>, applied by <c>AddRIoT2Telemetry()</c> (design 7.4).</summary>
+        public TelemetryOptions Telemetry { get; set; } = new();
+
         /// <summary>
         /// How long a workflow trigger waits in the outbox for delivery before it expires (design 7.1).
         /// <c>RIOT2_OUTBOX_WORKFLOW_TTL</c> in seconds, 1–86400; default 300.
@@ -63,6 +66,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 Url = settings.RequiredHttpUrl(UrlVariable),
                 Mqtt = MqttOptions.Read(settings),
                 Logging = LoggingOptions.Read(settings),
+                Telemetry = TelemetryOptions.Read(settings),
                 WorkflowTriggerTtl = TimeSpan.FromSeconds(settings.Integer(WorkflowTriggerTtlVariable, 300, 1, 86400)),
                 CommandTtl = TimeSpan.FromSeconds(settings.Integer(CommandTtlVariable, 30, 1, 86400)),
                 BackupSchedule = settings.Optional(BackupScheduleVariable)?.Trim(),

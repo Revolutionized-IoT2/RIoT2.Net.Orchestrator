@@ -152,6 +152,21 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
             }
         }
 
+        /// <summary>Pending messages per kind, and the age of the oldest one in seconds.</summary>
+        public IReadOnlyDictionary<string, (int Count, double OldestAgeSeconds)> GetPending(long now)
+        {
+            var pending = new Dictionary<string, (int, double)>(StringComparer.Ordinal);
+            lock (_gate)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                using var command = Command("SELECT kind, COUNT(*), MIN(created_utc) FROM outbox WHERE status = 'pending' GROUP BY kind");
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                    pending[reader.GetString(0)] = (reader.GetInt32(1), Math.Max(0, now - reader.GetInt64(2)) / 1000.0);
+            }
+            return pending;
+        }
+
         public OutboxSummary GetSummary(long now, int lastErrors = 10)
         {
             var counts = OutboxStatus.All.ToDictionary(status => status, _ => 0);

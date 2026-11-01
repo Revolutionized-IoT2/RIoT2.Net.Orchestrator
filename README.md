@@ -27,6 +27,7 @@ How the orchestrator fits into the platform:
 | `Services/Outbox/` | The durable outbox: SQLite store, dispatcher, health check (design 7.1) |
 | `Services/Persistence/FileObjectStore.cs` | File-backed JSON storage under `StoredObjects/` |
 | `Services/Backup/` | Configuration backup and restore, and the backup schedule (design 7.4) |
+| `Services/OrchestratorMetrics.cs` | The `RIoT2.Orchestrator` meter: reports, workflow deliveries, outbox, commands, nodes (design 7.4) |
 | `Services/Matter/` | Matter Control Bridge configuration, commissioning and endpoint bridging |
 | `CustomJsonSettings/` | Controller JSON settings (`OrchestratorJsonOptions`) and the optional `json-naming-policy` formatter profiles |
 | `openapi/riot2-orchestrator.json` | OpenAPI document of the REST routes, written by every build and committed |
@@ -54,10 +55,16 @@ invalid setting, for example `Invalid orchestrator configuration: {problem}; {pr
 | `RIOT2_LOG_LEVEL` | No | `Trace` … `Critical`; default `Information` |
 | `RIOT2_BACKUP_SCHEDULE` | No | When to write a backup to `Backups/`: a Quartz cron expression with seconds, such as `0 0 3 * * ?` (03:00 daily, local time); unset is off |
 | `RIOT2_BACKUP_RETENTION` | No | How many backups `Backups/` keeps; 1–365, default 7 |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | No | OTLP collector for metrics, such as `http://otel-collector:4317`; unset exports nothing |
+| `RIOT2_TRACING` | No | `true` also exports traces; needs the endpoint |
 
 Logs go to the console and to `Logs/RIoT2.log` (`/app/Logs`), rolled daily and at 50 MB, 14 files
 kept, through `AddRIoT2Logging()` from `RIoT2.Core.Hosting`. Lines logged while a command or a
 workflow trigger is delivered end with `[CorrelationId=…]` or `[MessageId=…]`.
+
+Metrics (meter `RIoT2.Orchestrator`, plus `riot2.mqtt.*`, ASP.NET Core and the runtime) go out through
+`AddRIoT2Telemetry()`; every name is in the
+[metrics contract](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/metrics.md).
 
 Hosting variables such as `ASPNETCORE_HTTP_PORTS`, `ASPNETCORE_URLS`, `ASPNETCORE_ENVIRONMENT` and
 `TZ` are described in the platform

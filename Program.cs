@@ -11,6 +11,7 @@ using RIoT2.Net.Orchestrator.Services.Commands;
 using RIoT2.Net.Orchestrator.Services.Outbox;
 using RIoT2.Net.Orchestrator.Services.Matter;
 using RIoT2.Net.Orchestrator.Services.Persistence;
+using RIoT2.Core.Diagnostics;
 using RIoT2.Core.Hosting;
 using System.Text.Json;
 
@@ -28,6 +29,10 @@ var builder = WebApplication.CreateBuilder(args);
 ILoggerFactory logger = builder.AddRIoT2Logging("orchestrator");
 
 Microsoft.Extensions.Logging.ILogger orchestratorLogger = logger.CreateLogger("RIoT2.Net.Orchestrator");
+
+// Metrics (and traces with RIOT2_TRACING=true) over OTLP, only when OTEL_EXPORTER_OTLP_ENDPOINT is set (design 7.4).
+if (!generatingOpenApiDocument)
+    builder.AddRIoT2Telemetry("orchestrator", builder.Configuration[OrchestratorOptions.IdVariable], MeterNames.Orchestrator);
 
 // Every RIOT2_* setting is read and validated here, before anything uses it; an invalid setting
 // stops the start with one message that lists every problem.
@@ -117,6 +122,11 @@ if (!generatingOpenApiDocument)
 {
     var orchestratorConfiguration = app.Services.GetRequiredService<IOrchestratorConfigurationService>().OrchestratorConfiguration;
     orchestratorLogger.LogInformation($"Services initialized. {orchestratorConfiguration.Manifest?.Name} - {orchestratorConfiguration.Manifest?.Version}");
+
+    // The gauges read the outbox and the node lists until the host stops.
+    OrchestratorMetrics.Observe(app.Services.GetRequiredService<OutboxStore>(), app.Services.GetRequiredService<IOnlineNodeService>(),
+        app.Services.GetRequiredService<IOrchestratorConfigurationService>(), app.Services.GetRequiredService<TimeProvider>());
+    app.Lifetime.ApplicationStopping.Register(() => OrchestratorMetrics.Observe(null, null, null, null));
 
     IHostApplicationLifetime lifetime = app.Lifetime;
     lifetime.ApplicationStarted.Register(() =>

@@ -160,6 +160,7 @@ namespace RIoT2.Net.Orchestrator.Services.Commands
                 return;
             if (_store.CompleteLate(message.Id, nodeId, outcome == DeliveryOutcome.Delivered ? OutboxStatus.Done : OutboxStatus.Failed, Now, status, error))
             {
+                OrchestratorMetrics.Delivery(message, status, Now);
                 if (status is CommandDeliveryStatus.Executed or CommandDeliveryStatus.Duplicate)
                     _state.SetState(Command.Create(message.Payload));
                 _logger.LogInformation("Command {CommandId} ({CorrelationId}) for {NodeId}: the result {Status} arrived after its attempt stopped waiting",

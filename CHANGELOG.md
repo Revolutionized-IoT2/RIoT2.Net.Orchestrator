@@ -5,6 +5,18 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-11-01
+
+Metrics ([I22](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i22-metrics-m), design 7.4 phase 4), with RIoT2.Core 1.10.0.
+No port, user or volume changes.
+
+- Added: the meter `RIoT2.Orchestrator`: `riot2.reports.received` and `riot2.reports.unknown_template`
+  (by node), `riot2.workflow.deliveries` (by outcome), `riot2.outbox.pending` and`
+  `riot2.outbox.oldest_age_seconds` (by kind), `riot2.commands` and the `riot2.command.latency`
+  histogram (by outcome), `riot2.nodes.online` (by type) and `riot2.nodes.out_of_sync` (by state).
+- Added: `OTEL_EXPORTER_OTLP_ENDPOINT` exports them, with `riot2.mqtt.*`, ASP.NET Core and runtime
+  metrics, over OTLP; `RIOT2_TRACING=true` adds traces. Unset, nothing is exported.
+
 ## [1.7.0] - 2026-11-01
 
 Backup and restore ([I21](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i21-backup-and-restore-m), design 7.4 phase 3).

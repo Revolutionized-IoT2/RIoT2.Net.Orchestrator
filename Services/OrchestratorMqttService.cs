@@ -257,9 +257,15 @@ namespace RIoT2.Net.Orchestrator.Services
                     return;
                 }
 
+                var node = Constants.GetTopicId(mqttEventArgs.Topic, MqttTopic.Report);
                 var template = _configuration.GetReportTemplates().FirstOrDefault(x => x.Id == report.Id);
                 if (template == null)
-                    return; //Do not process reports that have not been defined
+                {
+                    //Do not process reports that have not been defined
+                    OrchestratorMetrics.ReportsUnknownTemplate.Add(1, OrchestratorMetrics.Tag("node", node));
+                    return;
+                }
+                OrchestratorMetrics.ReportsReceived.Add(1, OrchestratorMetrics.Tag("node", node));
 
                 _deviceStateService.SetState(report, template.MaintainHistory);
 

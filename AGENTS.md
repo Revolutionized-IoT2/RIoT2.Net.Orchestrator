@@ -67,6 +67,7 @@ must keep them passing.
 | `Services/Automation/` | `IAutomationProvider` (ADR 0008) and `ElsaAutomationProvider`, which stores triggers in the outbox and runs their dispatcher as a hosted service |
 | `Services/Outbox/` | `OutboxStore` (`StoredObjects/outbox.db`, plain SQL over `Microsoft.Data.Sqlite`), `OutboxDispatcher` (FIFO per target, backoff, TTL, cleanup), `OutboxHealthCheck` |
 | `Services/Persistence/` | File-backed `StoredObjects/<Type>/<Id>.json` object store; `IObjectStoreArchive` exports and replaces it all |
+| `Services/OrchestratorMetrics.cs` | Meter `RIoT2.Orchestrator` (design 7.4); names in the hub's `contracts/metrics.md`, pinned by RIoT2.Tests |
 | `Services/Backup/` | Configuration backup and restore (design 7.4): `BackupArchive` (zip and manifest validation), `BackupService`, `BackupScheduler` (`RIOT2_BACKUP_SCHEDULE`) |
 | `Services/Matter/` | Matter Control Bridge configuration, endpoint composition, commissioning and report/command bridging |
 | `Services/WorkflowTriggerClient.cs` | Reused gRPC client/channel with a five-second workflow trigger deadline; used only by `ElsaAutomationProvider` |
