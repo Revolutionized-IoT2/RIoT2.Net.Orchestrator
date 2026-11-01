@@ -13,7 +13,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="RIoT2.Core" />
+    <!-- The contract, the MQTT client and the HTTP helpers; no device SDK or node runtime (plan M1 step 4). -->
+    <PackageReference Include="RIoT2.Core.Contracts" />
+    <PackageReference Include="RIoT2.Core.Http" />
+    <PackageReference Include="RIoT2.Core.Mqtt" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.ApiDescription.Server">
@@ -21,6 +24,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="QRCoder" />
+    <PackageReference Include="Quartz" />
     <PackageReference Include="RIoT2.Matter" />
     <PackageReference Include="RIoT2.Matter.ControlBridge" />
     <PackageReference Include="RIoT2.Core.Hosting" />
