@@ -10,7 +10,7 @@ namespace RIoT2.Net.Orchestrator.Services
         private OrchestratorConfiguration _configuration;
         private List<NodeDeviceConfiguration> _nodes = [];
         private ILogger _logger;
-        private DashboardConfiguration _dashboardConfiguration;
+        private DashboardConfiguration? _dashboardConfiguration;
         private IStoredObjectStore _storedObjectService;
 
         public OrchestratorConfigurationService(IOptions<OrchestratorOptions> options, IStoredObjectStore storedObjectService, ILogger<OrchestratorConfigurationService> logger) 
@@ -66,7 +66,7 @@ namespace RIoT2.Net.Orchestrator.Services
         public OrchestratorConfiguration OrchestratorConfiguration { get { return _configuration; } }
         public List<NodeDeviceConfiguration> NodeConfigurations { get { return _nodes; } }
 
-        public string FindNodeId(string id)
+        public string? FindNodeId(string id)
         {
             foreach (var n in NodeConfigurations)
             {
@@ -94,7 +94,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 .Where(x => x.DeviceConfigurations != null)
                 .SelectMany(x => x.DeviceConfigurations
                 .Where(x => x.CommandTemplates != null)
-                .SelectMany(d => d.CommandTemplates))
+                .SelectMany(d => d.CommandTemplates!))
                 .ToList();
 
             foreach (var v in _storedObjectService.GetAll<Variable>())
@@ -118,7 +118,7 @@ namespace RIoT2.Net.Orchestrator.Services
             return templates;
         }
 
-        public DashboardConfiguration DashboardConfiguration
+        public DashboardConfiguration? DashboardConfiguration
         {
             get
             {
@@ -173,11 +173,11 @@ namespace RIoT2.Net.Orchestrator.Services
             }
         }
 
-        public string SaveNodeConfiguration(string json)
+        public string? SaveNodeConfiguration(string json)
         {
             try
             {
-                NodeDeviceConfiguration conf = Json.Deserialize<NodeDeviceConfiguration>(json);
+                NodeDeviceConfiguration? conf = Json.Deserialize<NodeDeviceConfiguration>(json);
                 if (conf != null)
                 {
                     return SaveNodeConfiguration(conf);
@@ -194,7 +194,7 @@ namespace RIoT2.Net.Orchestrator.Services
             return null;
         }
 
-        public string SaveNodeConfiguration(NodeDeviceConfiguration configuration)
+        public string? SaveNodeConfiguration(NodeDeviceConfiguration configuration)
         {
             if (String.IsNullOrEmpty(configuration.Id)) 
             {
@@ -246,9 +246,9 @@ namespace RIoT2.Net.Orchestrator.Services
             _nodes = _storedObjectService.GetAll<NodeDeviceConfiguration>().ToList();
             return id;
         }
-        public string SaveDashboardConfiguration(string json)
+        public string? SaveDashboardConfiguration(string json)
         {
-            DashboardConfiguration dashboard = Json.Deserialize<DashboardConfiguration>(json);
+            DashboardConfiguration? dashboard = Json.Deserialize<DashboardConfiguration>(json);
             if (dashboard != null)
                 return SaveDashboardConfiguration(dashboard);
 
@@ -256,7 +256,7 @@ namespace RIoT2.Net.Orchestrator.Services
             return null;
         }
 
-        public string SaveDashboardConfiguration(DashboardConfiguration dashboard)
+        public string? SaveDashboardConfiguration(DashboardConfiguration dashboard)
         {
             try
             {

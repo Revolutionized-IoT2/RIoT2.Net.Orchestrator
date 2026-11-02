@@ -34,7 +34,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         /// <c>cd.der</c> and <c>dac-key.pem</c>). When empty, TEST credentials are generated for the
         /// configured VID/PID and cached under <see cref="CredentialsDirectory"/>.
         /// </summary>
-        public string AttestationPath { get; set; }
+        public string? AttestationPath { get; set; }
 
         /// <summary>The directory generated TEST credentials and the persisted fabric table are written to, relative to the content root when not rooted.</summary>
         public string CredentialsDirectory { get; set; } = "MatterCredentials";
@@ -43,7 +43,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         /// The passphrase sealing the persisted fabric table. Change it and every commissioned fabric is
         /// lost, so it is generated once and then left alone unless the operator overrides it.
         /// </summary>
-        public string FabricStoreKey { get; set; }
+        public string? FabricStoreKey { get; set; }
 
         /// <summary>Returns a copy so a caller cannot mutate the service's live instance.</summary>
         public MatterConfiguration Copy() => new()

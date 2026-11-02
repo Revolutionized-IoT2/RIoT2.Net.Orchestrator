@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using RIoT2.Core.Models.Matter;
 using RIoT2.Matter.Clusters;
 using RIoT2.Matter.ControlBridge;
@@ -67,7 +68,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         /// <paramref name="device"/>'s endpoint.
         /// </summary>
         /// <returns><see langword="false"/> when the endpoint's device type does not carry that attribute.</returns>
-        public static bool TryBind(BridgedDevice device, MatterAttribute attribute, out MatterAttributeAccessor accessor)
+        public static bool TryBind(BridgedDevice device, MatterAttribute attribute, [NotNullWhen(true)] out MatterAttributeAccessor? accessor)
         {
             ArgumentNullException.ThrowIfNull(device);
             accessor = null;
@@ -263,7 +264,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
             }
         }
 
-        private static bool TryGet<TCluster>(BridgedDevice device, ClusterId clusterId, out TCluster cluster)
+        private static bool TryGet<TCluster>(BridgedDevice device, ClusterId clusterId, [NotNullWhen(true)] out TCluster? cluster)
             where TCluster : Cluster
         {
             cluster = device.Endpoint.TryGetCluster(clusterId, out var found) ? found as TCluster : null;

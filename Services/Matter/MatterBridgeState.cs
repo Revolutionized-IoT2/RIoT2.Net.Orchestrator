@@ -22,7 +22,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         public uint PbkdfIterations { get; set; }
 
         /// <summary>The PBKDF salt of the SPAKE2+ verifier, base64-encoded.</summary>
-        public string PbkdfSalt { get; set; }
+        public string? PbkdfSalt { get; set; }
 
         /// <summary>
         /// <see cref="RIoT2.Core.Models.Matter.MatterEndpointTemplate.Id"/> to Matter endpoint id. A

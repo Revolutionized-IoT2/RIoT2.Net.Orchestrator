@@ -78,7 +78,7 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
             var manifestEntry = zip.GetEntry(BackupManifest.FileName)
                 ?? throw Invalid($"The archive has no {BackupManifest.FileName}, so it is not a RIoT2 configuration backup.");
 
-            BackupManifest manifest;
+            BackupManifest? manifest;
             try
             {
                 manifest = JsonSerializer.Deserialize<BackupManifest>(ReadEntry(manifestEntry, MaxManifestBytes), JsonOptions);
@@ -161,7 +161,7 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
         /// <c>StoredObjects/&lt;Type&gt;/&lt;Id&gt;.json</c> and files under <c>MatterCredentials/</c>, with
         /// portable names, no <c>..</c> and nothing hidden. The outbox database is never part of a backup.
         /// </summary>
-        public static string CheckPath(string path)
+        public static string? CheckPath(string path)
         {
             if (string.IsNullOrEmpty(path))
                 return "An entry has no name.";

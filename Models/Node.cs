@@ -7,9 +7,9 @@ namespace RIoT2.Net.Orchestrator.Models
         public string Id { get; set; }
         public string Name { get; set; }
         public bool IsOnline { get; set; }
-        public List<DeviceStatus> DeviceStatuses { get; set; }
-        public PackageManifest Manifest { get; set; }
-        public PackageManifest PluginManifest { get; set; }
+        public List<DeviceStatus>? DeviceStatuses { get; set; }
+        public PackageManifest? Manifest { get; set; }
+        public PackageManifest? PluginManifest { get; set; }
 
         /// <summary>The revision of the saved configuration (design 7.2).</summary>
         public int? DesiredRevision { get; set; }
@@ -21,6 +21,6 @@ namespace RIoT2.Net.Orchestrator.Models
         public string SyncState { get; set; }
 
         /// <summary>The error of the node's last failed configuration, if any.</summary>
-        public string LastError { get; set; }
+        public string? LastError { get; set; }
     }
 }

@@ -12,7 +12,7 @@ namespace RIoT2.Net.Orchestrator.Services.Commands
         public string CorrelationId { get; init; }
 
         /// <summary>The command (template) id.</summary>
-        public string CommandId { get; init; }
+        public string? CommandId { get; init; }
 
         /// <summary>The node the command goes to.</summary>
         public string NodeId { get; init; }
@@ -24,7 +24,7 @@ namespace RIoT2.Net.Orchestrator.Services.Commands
         public bool IsFinal => Status != CommandDeliveryStatus.Pending;
 
         /// <summary>Why the command failed or was retried, if it was.</summary>
-        public string Error { get; init; }
+        public string? Error { get; init; }
 
         /// <summary>Delivery attempts that got no final answer.</summary>
         public int Attempts { get; init; }

@@ -19,12 +19,13 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         public required Action<double> Write { get; init; }
 
         /// <summary>Adds a handler to the cluster's change event, or null when the attribute raises none.</summary>
-        public Action<EventHandler> Subscribe { get; init; }
+        public Action<EventHandler>? Subscribe { get; init; }
 
         /// <summary>Removes a handler added by <see cref="Subscribe"/>.</summary>
-        public Action<EventHandler> Unsubscribe { get; init; }
+        public Action<EventHandler>? Unsubscribe { get; init; }
 
         /// <summary>Whether the attribute raises a change event a controller's writes can be observed through.</summary>
+        [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, nameof(Subscribe))]
         public bool CanSubscribe => Subscribe is not null;
     }
 }

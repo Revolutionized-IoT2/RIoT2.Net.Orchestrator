@@ -25,7 +25,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         private readonly ILogger _logger;
         private readonly List<Subscription> _subscriptions = [];
 
-        private BridgedDevice _device;
+        private BridgedDevice? _device;
 
         /// <param name="template">The endpoint declared by the RIoT device.</param>
         /// <param name="nodeId">The id of the node owning the device, used for status and reachability.</param>
@@ -63,7 +63,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         public string DeviceId { get; }
 
         /// <summary>The bridged endpoint, once attached.</summary>
-        public BridgedDevice Device => _device;
+        public BridgedDevice? Device => _device;
 
         /// <inheritdoc />
         public ValueTask AttachAsync(BridgedDevice device, CancellationToken cancellationToken = default)
@@ -112,7 +112,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         /// Applies a RIoT report to every cluster attribute bound to it. Reports for other devices are
         /// ignored, so the bridge can hand every report to every adapter.
         /// </summary>
-        public void OnReport(Report report)
+        public void OnReport(Report? report)
         {
             if (_device is null || report is null || string.IsNullOrEmpty(report.Id) || report.Value is null)
                 return;
@@ -140,7 +140,8 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
                 return;
             }
 
-            if (!MatterEndpointComposer.TryBind(_device, binding.Attribute, out var accessor))
+            // OnReport only calls this while the device is attached.
+            if (!MatterEndpointComposer.TryBind(_device!, binding.Attribute, out var accessor))
             {
                 _logger?.LogWarning(
                     "Matter endpoint {Endpoint}: attribute {Attribute} is not carried by device type {DeviceType}",
@@ -167,7 +168,8 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
 
         private void Subscribe(MatterCommandBinding binding)
         {
-            if (!MatterEndpointComposer.TryBind(_device, binding.Attribute, out var accessor))
+            // AttachAsync calls this after setting the device.
+            if (!MatterEndpointComposer.TryBind(_device!, binding.Attribute, out var accessor))
             {
                 _logger?.LogWarning(
                     "Matter endpoint {Endpoint}: command binding for {Attribute} does not match device type {DeviceType}",
@@ -257,7 +259,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         /// reports a number, a boolean or a string. Walking the JSON directly lets one code path accept all
         /// three and normalise booleans to 0 and 1.
         /// </remarks>
-        private static bool TryExtract(ValueModel value, string path, out double result)
+        private static bool TryExtract(ValueModel value, string? path, out double result)
         {
             result = 0d;
 

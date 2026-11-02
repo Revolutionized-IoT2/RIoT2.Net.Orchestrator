@@ -40,7 +40,7 @@ namespace RIoT2.Net.Orchestrator.Services
             _onlineNodes.TryRemove(id, out _);
         }
 
-        public void SetStatus(string id, NodeStatusMessage status)
+        public void SetStatus(string id, NodeStatusMessage? status)
         {
             if (status == null)
                 _statuses.TryRemove(id, out _);
@@ -48,9 +48,9 @@ namespace RIoT2.Net.Orchestrator.Services
                 _statuses[id] = status;
         }
 
-        public NodeStatusMessage GetStatus(string id) => _statuses.TryGetValue(id, out var status) ? status : null;
+        public NodeStatusMessage? GetStatus(string id) => _statuses.TryGetValue(id, out var status) ? status : null;
 
-        internal static string SyncState(NodeDeviceConfiguration configuration, OnlineNode online, NodeStatusMessage status)
+        internal static string SyncState(NodeDeviceConfiguration configuration, OnlineNode? online, NodeStatusMessage? status)
         {
             var settings = online?.OnlineNodeSettings;
             if (settings != null && !settings.HasCapability(Contract.Capabilities.DesiredState))
@@ -92,7 +92,7 @@ namespace RIoT2.Net.Orchestrator.Services
             return nodes.ToList();
         }
 
-        public async Task<List<DeviceConfiguration>> LoadDeviceConfigurationTemplateAsync(string id) 
+        public async Task<List<DeviceConfiguration>?> LoadDeviceConfigurationTemplateAsync(string id) 
         {
             if (!_onlineNodes.TryGetValue(id, out var onlineNode))
                 return null;
@@ -114,7 +114,7 @@ namespace RIoT2.Net.Orchestrator.Services
             return null;
         }
 
-        public async Task<List<DeviceStatus>> LoadDeviceStatusFromNodeAsync(string nodeId)
+        public async Task<List<DeviceStatus>?> LoadDeviceStatusFromNodeAsync(string nodeId)
         {
             if (!_onlineNodes.TryGetValue(nodeId, out var onlineNode))
                 return null;
@@ -136,11 +136,11 @@ namespace RIoT2.Net.Orchestrator.Services
             return null;
         }
 
-        public async Task<Dictionary<string, List<DeviceConfiguration>>> LoadDeviceConfigurationTemplatesAsync()
+        public async Task<Dictionary<string, List<DeviceConfiguration>?>> LoadDeviceConfigurationTemplatesAsync()
         {
-            var results = new Dictionary<string, List<DeviceConfiguration>>();
+            var results = new Dictionary<string, List<DeviceConfiguration>?>();
 
-            Dictionary<string, Task<List<DeviceConfiguration>>> requests = new Dictionary<string, Task<List<DeviceConfiguration>>>();
+            Dictionary<string, Task<List<DeviceConfiguration>?>> requests = new Dictionary<string, Task<List<DeviceConfiguration>?>>();
             foreach (var onlineNode in _onlineNodes.Values) 
             {
                 if(onlineNode.OnlineNodeSettings.NodeType == NodeType.Device)

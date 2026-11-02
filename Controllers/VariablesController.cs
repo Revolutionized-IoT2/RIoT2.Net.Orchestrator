@@ -46,7 +46,8 @@ namespace RIoT2.Net.Orchestrator.Controllers
         {
             if (variable.Type == Core.ValueType.Number)
             {
-                if (variable.Value.ToString().Contains('.'))
+                // A number variable arrives with a value; a missing one throws as it always has.
+                if (variable.Value!.ToString()!.Contains('.'))
                 {
                     if (double.TryParse(variable.Value.ToString(), out double d))
                         variable.Value = d;

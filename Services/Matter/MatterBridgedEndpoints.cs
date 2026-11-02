@@ -32,7 +32,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         // Copied on read so RouteReport can walk the adapters without a lock on the MQTT thread.
         private volatile RiotBridgedDeviceAdapter[] _adapters = [];
         private readonly object _presenceGate = new();
-        private readonly Dictionary<string, string> _adapterSignatures = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, string?> _adapterSignatures = new(StringComparer.Ordinal);
 
         public MatterBridgedEndpoints(
             IOrchestratorConfigurationService configurationService,
@@ -79,7 +79,8 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
                         continue;
                     try
                     {
-                        await aggregator.RemoveBridgedDeviceAsync(adapter.Device, cancellationToken);
+                        // The adapters in the list were attached by AddAsync.
+                        await aggregator.RemoveBridgedDeviceAsync(adapter.Device!, cancellationToken);
                         adapters.Remove(adapter);
                         _adapterSignatures.Remove(key);
                     }
@@ -98,7 +99,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
                         var adapter = await AddAsync(aggregator, state, definition.NodeId, definition.Device, definition.Template, online, cancellationToken);
                         adapters.Add(adapter);
                         _adapterSignatures[key] = definition.Signature;
-                        var assigned = adapter.Device.EndpointId.Value;
+                        var assigned = adapter.Device!.EndpointId.Value;
                         if (!state.EndpointMap.TryGetValue(key, out var known) || known != assigned)
                         {
                             state.EndpointMap[key] = assigned;
@@ -132,7 +133,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         /// Removes every bridged endpoint from <paramref name="aggregator"/>, or only forgets them when
         /// the bridge is already gone.
         /// </summary>
-        public async Task RemoveAllAsync(AggregatorEndpoint aggregator, CancellationToken cancellationToken = default)
+        public async Task RemoveAllAsync(AggregatorEndpoint? aggregator, CancellationToken cancellationToken = default)
         {
             var adapters = _adapters;
             _adapters = [];
@@ -160,7 +161,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         /// <summary>
         /// Hands a report to every endpoint; each ignores reports that are not bound to it. Never throws.
         /// </summary>
-        public void RouteReport(Report report)
+        public void RouteReport(Report? report)
         {
             foreach (var adapter in _adapters)
             {
@@ -194,13 +195,13 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         public IEnumerable<MatterEndpointStatus> GetStatus() =>
             _adapters.Where(a => a.Device is not null).Select(a => new MatterEndpointStatus
             {
-                EndpointId = a.Device.EndpointId.Value,
+                EndpointId = a.Device!.EndpointId.Value,
                 TemplateId = a.Template.Id,
                 Name = a.Template.Name,
                 DeviceType = a.Template.DeviceType.ToString(),
                 NodeId = a.NodeId,
                 DeviceId = a.DeviceId,
-                Reachable = a.Device.Reachable
+                Reachable = a.Device!.Reachable
             });
 
         private HashSet<string> OnlineNodeIds() =>
@@ -208,9 +209,9 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
                 .Select(n => n.Id).ToHashSet(StringComparer.Ordinal);
 
         // The signature covers everything baked into a composed endpoint, so any change re-creates it.
-        private Dictionary<string, (string NodeId, DeviceConfiguration Device, MatterEndpointTemplate Template, string Signature)> DesiredEndpoints()
+        private Dictionary<string, (string NodeId, DeviceConfiguration Device, MatterEndpointTemplate Template, string? Signature)> DesiredEndpoints()
         {
-            var desired = new Dictionary<string, (string NodeId, DeviceConfiguration Device, MatterEndpointTemplate Template, string Signature)>(StringComparer.Ordinal);
+            var desired = new Dictionary<string, (string NodeId, DeviceConfiguration Device, MatterEndpointTemplate Template, string? Signature)>(StringComparer.Ordinal);
             foreach (var node in _configurationService.NodeConfigurations ?? [])
                 foreach (var device in node.DeviceConfigurations ?? [])
                     foreach (var template in device.MatterEndpoints ?? [])

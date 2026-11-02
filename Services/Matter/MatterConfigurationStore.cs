@@ -46,7 +46,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         /// <summary>Drops the provisioning bundle and endpoint map so the next start pairs the bridge afresh.</summary>
         public void DeleteState() => _store.Delete(StateType, SingletonId);
 
-        private T Read<T>(string typeName) where T : class
+        private T? Read<T>(string typeName) where T : class
         {
             try
             {

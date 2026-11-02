@@ -9,7 +9,7 @@ namespace RIoT2.Net.Orchestrator.Models
         public string Description { get; set; }
         public bool IsPersistant { get; set; }
         public Core.ValueType Type { get; set; }
-        public object Value { get; set; }
+        public object? Value { get; set; }
 
         public static VariableDTO ToVariableDTO(Variable variable) 
         {

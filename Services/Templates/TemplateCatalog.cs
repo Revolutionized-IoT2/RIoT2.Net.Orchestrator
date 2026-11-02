@@ -38,7 +38,8 @@ namespace RIoT2.Net.Orchestrator.Services.Templates
 
         public IReadOnlyList<VariableTemplate> GetVariableTemplates()
         {
-            var orchestratorId = _configuration.OrchestratorConfiguration?.Id;
+            // The id is a required setting (OrchestratorOptions.Load).
+            var orchestratorId = _configuration.OrchestratorConfiguration?.Id!;
             return _storedObjects.GetAll<Variable>().Select(v => new VariableTemplate
             {
                 NodeId = orchestratorId,
@@ -53,7 +54,7 @@ namespace RIoT2.Net.Orchestrator.Services.Templates
             }).ToList();
         }
 
-        public NodeReportTemplate FindReportTemplate(string id)
+        public NodeReportTemplate? FindReportTemplate(string id)
         {
             if (string.IsNullOrEmpty(id))
                 return null;

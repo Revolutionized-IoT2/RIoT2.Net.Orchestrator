@@ -13,7 +13,7 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
         public string Target { get; init; }
 
         /// <summary>What the message is about, for logs and the summary: the report id or command id.</summary>
-        public string Subject { get; init; }
+        public string? Subject { get; init; }
 
         /// <summary>The serialized message, as the kind's transport needs it.</summary>
         public string Payload { get; init; }
@@ -27,8 +27,8 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
         /// <summary><see cref="OutboxStatus"/>.</summary>
         public string Status { get; init; } = OutboxStatus.Pending;
 
-        public string Result { get; init; }
-        public string LastError { get; init; }
+        public string? Result { get; init; }
+        public string? LastError { get; init; }
     }
 
     public static class OutboxKind

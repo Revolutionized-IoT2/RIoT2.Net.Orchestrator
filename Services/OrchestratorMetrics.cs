@@ -25,7 +25,7 @@ namespace RIoT2.Net.Orchestrator.Services
         public const string NodesOutOfSyncName = "riot2.nodes.out_of_sync";
 
         private static readonly Meter Meter = new(MeterNames.Orchestrator);
-        private static volatile Sources _sources;
+        private static volatile Sources? _sources;
 
         /// <summary>Reports with a known template, by <c>node</c>.</summary>
         public static readonly Counter<long> ReportsReceived = Meter.CreateCounter<long>(ReportsReceivedName, "{report}",
@@ -60,7 +60,7 @@ namespace RIoT2.Net.Orchestrator.Services
         }
 
         /// <summary>Lets the gauges read <paramref name="store"/> and the node lists; <c>null</c> stops them.</summary>
-        public static void Observe(OutboxStore store, IOnlineNodeService nodes, IOrchestratorConfigurationService configuration, TimeProvider time) =>
+        public static void Observe(OutboxStore? store, IOnlineNodeService? nodes, IOrchestratorConfigurationService? configuration, TimeProvider? time) =>
             _sources = store == null ? null : new Sources(store, nodes, configuration, time ?? TimeProvider.System);
 
         /// <summary>Records a delivery step of the outbox: workflow outcomes, and final commands with their latency.</summary>
@@ -80,7 +80,7 @@ namespace RIoT2.Net.Orchestrator.Services
         /// <summary>The <c>outcome</c> of an attempt that will be retried; counted for workflow triggers only.</summary>
         public const string Retry = "retry";
 
-        internal static KeyValuePair<string, object> Tag(string name, object value) => new(name, value);
+        internal static KeyValuePair<string, object?> Tag(string name, object? value) => new(name, value);
 
         private static IEnumerable<Measurement<T>> Observe<T>(Func<Sources, IEnumerable<Measurement<T>>> observe) where T : struct
         {
@@ -98,7 +98,7 @@ namespace RIoT2.Net.Orchestrator.Services
             }
         }
 
-        private sealed record Sources(OutboxStore Store, IOnlineNodeService Nodes, IOrchestratorConfigurationService Configuration, TimeProvider Time)
+        private sealed record Sources(OutboxStore Store, IOnlineNodeService? Nodes, IOrchestratorConfigurationService? Configuration, TimeProvider Time)
         {
             private static readonly string[] Kinds = [OutboxKind.Workflow, OutboxKind.Command];
 
@@ -125,8 +125,9 @@ namespace RIoT2.Net.Orchestrator.Services
                 var online = (Nodes?.OnlineNodes ?? []).Where(n => n?.OnlineNodeSettings?.IsOnline == true)
                     .GroupBy(n => n.Id).ToDictionary(g => g.Key, g => g.First());
                 var states = (Configuration?.NodeConfigurations ?? [])
+                    // online is empty when Nodes is null.
                     .Where(configuration => online.ContainsKey(configuration.Id))
-                    .Select(configuration => OnlineNodeService.SyncState(configuration, online[configuration.Id], Nodes.GetStatus(configuration.Id)))
+                    .Select(configuration => OnlineNodeService.SyncState(configuration, online[configuration.Id], Nodes!.GetStatus(configuration.Id)))
                     .ToList();
                 return new[] { NodeSyncState.Pending, NodeSyncState.Failed }
                     .Select(state => new Measurement<int>(states.Count(s => s == state), Tag("state", state)));

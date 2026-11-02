@@ -1,0 +1,5 @@
+# Serializer-populated models (plan M8 step 9, I32). A non-nullable member is one a valid
+# payload carries; optional members, and members the code checks for null, are nullable. The
+# serializers set the members, so CS8618 (non-nullable member not initialized) is off here.
+[{BackupManifest.cs,BackupModels.cs}]
+dotnet_diagnostic.CS8618.severity = none

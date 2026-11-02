@@ -11,7 +11,7 @@ namespace RIoT2.Net.Orchestrator.Models
         public string Id { get; set; }
         public string Name { get; set; }
         public string Address { get; set; }
-        public object Model { get; set; }
+        public object? Model { get; set; }
         public Core.ValueType Type { get; set; }
     }
 }

@@ -38,7 +38,7 @@ namespace RIoT2.Net.Orchestrator.Services
         /// <param name="reportId">The identifier of the report whose history to retrieve.</param>
         /// <param name="count">The maximum number of history entries to return, or <c>null</c> for all.</param>
         /// <returns>The historical reports, most recent first.</returns>
-        IEnumerable<Report> GetHistory(string reportId, int? count = null);
+        IEnumerable<Report>? GetHistory(string reportId, int? count = null);
 
         /// <summary>
         /// Clears the stored history and, optionally, the current state.

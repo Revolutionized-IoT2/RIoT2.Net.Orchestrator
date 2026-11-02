@@ -4,10 +4,10 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
     public sealed class BackupSummary
     {
         /// <summary><c>RIOT2_BACKUP_SCHEDULE</c>, or <c>null</c> when scheduled backups are off.</summary>
-        public string Schedule { get; set; }
+        public string? Schedule { get; set; }
         public int Retention { get; set; }
         public DateTimeOffset? NextRunAt { get; set; }
-        public BackupRun LastRun { get; set; }
+        public BackupRun? LastRun { get; set; }
 
         /// <summary>Newest first.</summary>
         public List<BackupInfo> Backups { get; set; } = [];
@@ -24,8 +24,8 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
     public sealed class BackupRun
     {
         public DateTimeOffset At { get; set; }
-        public string Name { get; set; }
-        public string Error { get; set; }
+        public string? Name { get; set; }
+        public string? Error { get; set; }
     }
 
     /// <summary>The answer to a restore.</summary>
@@ -34,8 +34,8 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
         /// <summary>When the restored backup was made, its kind, source orchestrator and versions.</summary>
         public DateTimeOffset CreatedAt { get; set; }
         public string Kind { get; set; }
-        public string OrchestratorId { get; set; }
-        public Dictionary<string, string> Versions { get; set; } = [];
+        public string? OrchestratorId { get; set; }
+        public Dictionary<string, string?> Versions { get; set; } = [];
 
         public int Files { get; set; }
         public int Nodes { get; set; }

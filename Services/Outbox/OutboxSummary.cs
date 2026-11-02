@@ -7,7 +7,7 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
         public IReadOnlyDictionary<string, int> Counts { get; init; }
 
         /// <summary>The oldest pending message, or <c>null</c> when nothing is pending.</summary>
-        public OutboxEntry OldestPending { get; init; }
+        public OutboxEntry? OldestPending { get; init; }
 
         /// <summary>The ten most recently updated messages that recorded an error, newest first.</summary>
         public IReadOnlyList<OutboxEntry> LastErrors { get; init; }
@@ -19,14 +19,14 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
         public string Id { get; init; }
         public string Kind { get; init; }
         public string Target { get; init; }
-        public string Subject { get; init; }
+        public string? Subject { get; init; }
         public string Status { get; init; }
         public int Attempts { get; init; }
         public DateTimeOffset Created { get; init; }
         public DateTimeOffset Expires { get; init; }
         public DateTimeOffset Updated { get; init; }
         public double AgeSeconds { get; init; }
-        public string LastError { get; init; }
+        public string? LastError { get; init; }
 
         internal static OutboxEntry From(OutboxMessage message, long now) => new()
         {

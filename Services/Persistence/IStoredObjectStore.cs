@@ -14,20 +14,20 @@ namespace RIoT2.Net.Orchestrator.Services.Persistence
         /// Raised after every save and delete, outside the store's lock, in the order the changes
         /// were made. A save whose content didn't change is raised with <see cref="OperationType.NoChange"/>.
         /// </summary>
-        event Action<StoredObjectChange> Changed;
+        event Action<StoredObjectChange>? Changed;
 
         /// <summary>A snapshot of every stored <typeparamref name="T"/>; loaded from the store on first use.</summary>
         IReadOnlyList<T> GetAll<T>() where T : class, IStoredObject;
 
         /// <summary>The stored <typeparamref name="T"/> with <paramref name="id"/>, or <c>null</c>.</summary>
-        T Get<T>(string id) where T : class, IStoredObject;
+        T? Get<T>(string id) where T : class, IStoredObject;
 
         /// <summary>
         /// Saves <paramref name="obj"/>, giving it a new GUID when its id is empty, and returns the id;
         /// <c>null</c> when the file could not be written (the cache then keeps the previous object).
         /// </summary>
         /// <param name="persistent">When <c>false</c>, the object is only kept in memory.</param>
-        string Save<T>(T obj, bool persistent = true) where T : class, IStoredObject;
+        string? Save<T>(T obj, bool persistent = true) where T : class, IStoredObject;
 
         /// <summary>Deletes the <typeparamref name="T"/> with <paramref name="id"/>.</summary>
         /// <param name="persistent">When <c>false</c>, the object is only removed from memory.</param>
@@ -44,7 +44,7 @@ namespace RIoT2.Net.Orchestrator.Services.Persistence
     /// The saved object, or the deleted one when it was in memory; <c>null</c> for a delete of everything.
     /// </param>
     /// <param name="Operation"><c>Created</c>, <c>Updated</c>, <c>NoChange</c> or <c>Deleted</c>.</param>
-    public sealed record StoredObjectChange(Type Type, string Id, IStoredObject Object, OperationType Operation)
+    public sealed record StoredObjectChange(Type Type, string? Id, IStoredObject? Object, OperationType Operation)
     {
         /// <summary>Whether the change is to a <typeparamref name="T"/>.</summary>
         public bool Is<T>() where T : IStoredObject => Type == typeof(T);

@@ -1316,10 +1316,7 @@
         "type": "object",
         "properties": {
           "name": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "sizeBytes": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -1381,13 +1378,17 @@
             "format": "date-time"
           },
           "lastRun": {
-            "$ref": "#/components/schemas/BackupRun"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BackupRun"
+              }
+            ]
           },
           "backups": {
-            "type": [
-              "null",
-              "array"
-            ],
+            "type": "array",
             "items": {
               "$ref": "#/components/schemas/BackupInfo"
             }
@@ -1398,10 +1399,7 @@
         "type": "object",
         "properties": {
           "correlationId": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "commandId": {
             "type": [
@@ -1410,16 +1408,10 @@
             ]
           },
           "nodeId": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "status": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "isFinal": {
             "type": "boolean"
@@ -1456,10 +1448,7 @@
         "type": "object",
         "properties": {
           "expression": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "isValid": {
             "type": "boolean"
@@ -1480,10 +1469,7 @@
             "type": "boolean"
           },
           "nodeLabel": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "vendorId": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -1516,10 +1502,7 @@
             ]
           },
           "credentialsDirectory": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "fabricStoreKey": {
             "type": [
@@ -1533,22 +1516,13 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "kind": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "target": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "subject": {
             "type": [
@@ -1557,10 +1531,7 @@
             ]
           },
           "status": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "attempts": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -1602,10 +1573,7 @@
         "type": "object",
         "properties": {
           "counts": {
-            "type": [
-              "null",
-              "object"
-            ],
+            "type": "object",
             "additionalProperties": {
               "pattern": "^-?(?:0|[1-9]\\d*)$",
               "type": [
@@ -1616,13 +1584,17 @@
             }
           },
           "oldestPending": {
-            "$ref": "#/components/schemas/OutboxEntry"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OutboxEntry"
+              }
+            ]
           },
           "lastErrors": {
-            "type": [
-              "null",
-              "array"
-            ],
+            "type": "array",
             "items": {
               "$ref": "#/components/schemas/OutboxEntry"
             }
@@ -1694,10 +1666,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "timeStamp": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -1735,10 +1704,7 @@
             "format": "date-time"
           },
           "kind": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "orchestratorId": {
             "type": [
@@ -1747,10 +1713,7 @@
             ]
           },
           "versions": {
-            "type": [
-              "null",
-              "object"
-            ],
+            "type": "object",
             "additionalProperties": {
               "type": "string"
             }
@@ -1788,10 +1751,7 @@
             "format": "int32"
           },
           "safetyBackup": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           }
         }
       },
@@ -1814,22 +1774,13 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "name": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "description": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "isPersistant": {
             "type": "boolean"

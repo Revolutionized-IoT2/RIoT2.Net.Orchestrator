@@ -29,10 +29,10 @@ namespace RIoT2.Net.Orchestrator.Services.Commands
         CommandDelivery Enqueue(Command command, string nodeId, TimeSpan? ttl = null);
 
         /// <summary>The delivery, or <c>null</c> when the id is unknown or was cleaned up (24 hours after it became final).</summary>
-        CommandDelivery Get(string correlationId);
+        CommandDelivery? Get(string correlationId);
 
         /// <summary>Waits until the delivery is final and returns it.</summary>
-        Task<CommandDelivery> WaitAsync(string correlationId, CancellationToken cancellationToken);
+        Task<CommandDelivery?> WaitAsync(string correlationId, CancellationToken cancellationToken);
 
         /// <summary>A node answered on <c>riot2/node/{id}/command/result</c>.</summary>
         void ResultReceived(string nodeId, CommandResult result);
@@ -75,7 +75,7 @@ namespace RIoT2.Net.Orchestrator.Services.Commands
         private readonly ConcurrentDictionary<string, (string NodeId, TaskCompletionSource<CommandResult> Result)> _waiting = new(StringComparer.Ordinal);
         private CancellationToken _stopping;
         private bool _running;
-        private volatile ICommandTransport _transport;
+        private volatile ICommandTransport? _transport;
 
         public CommandOutbox(OutboxStore store, IOnlineNodeService nodes, IMessageStateService state, IOptions<OrchestratorOptions> options,
             ILogger<CommandOutbox> logger, TimeProvider time)
@@ -106,7 +106,8 @@ namespace RIoT2.Net.Orchestrator.Services.Commands
                 Kind = OutboxKind.Command,
                 Target = nodeId,
                 Subject = command.Id,
-                Payload = Json.SerializeIgnoreNulls(new Command { Id = command.Id, Value = command.Value, CorrelationId = id }),
+                // Serializing a Command doesn't fail.
+                Payload = Json.SerializeIgnoreNulls(new Command { Id = command.Id, Value = command.Value, CorrelationId = id })!,
                 CreatedUtc = now,
                 ExpiresUtc = now + (long)lifetime.TotalMilliseconds,
                 NextAttemptUtc = now,
@@ -119,13 +120,13 @@ namespace RIoT2.Net.Orchestrator.Services.Commands
             return CommandDelivery.From(message);
         }
 
-        public CommandDelivery Get(string correlationId)
+        public CommandDelivery? Get(string correlationId)
         {
             var message = string.IsNullOrWhiteSpace(correlationId) ? null : _store.Get(correlationId);
             return message?.Kind == OutboxKind.Command ? CommandDelivery.From(message) : null;
         }
 
-        public async Task<CommandDelivery> WaitAsync(string correlationId, CancellationToken cancellationToken)
+        public async Task<CommandDelivery?> WaitAsync(string correlationId, CancellationToken cancellationToken)
         {
             while (true)
             {
@@ -162,7 +163,8 @@ namespace RIoT2.Net.Orchestrator.Services.Commands
             {
                 OrchestratorMetrics.Delivery(message, status, Now);
                 if (status is CommandDeliveryStatus.Executed or CommandDeliveryStatus.Duplicate)
-                    _state.SetState(Command.Create(message.Payload));
+                    // Enqueue serialized the payload from a Command.
+                    _state.SetState(Command.Create(message.Payload)!);
                 _logger.LogInformation("Command {CommandId} ({CorrelationId}) for {NodeId}: the result {Status} arrived after its attempt stopped waiting",
                     message.Subject, message.Id, nodeId, status);
             }
@@ -172,7 +174,7 @@ namespace RIoT2.Net.Orchestrator.Services.Commands
         {
             if (message?.IsOnline != true)
                 return;
-            OutboxDispatcher dispatcher;
+            OutboxDispatcher? dispatcher;
             lock (_gate)
                 _dispatchers.TryGetValue(nodeId, out dispatcher);
             dispatcher?.TargetCameOnline();
@@ -239,7 +241,7 @@ namespace RIoT2.Net.Orchestrator.Services.Commands
 
         private bool IsAvailable(string nodeId) => _transport?.IsConnected == true && FindNode(nodeId) != null;
 
-        private OnlineNode FindNode(string nodeId) =>
+        private OnlineNode? FindNode(string nodeId) =>
             _nodes.OnlineNodes.FirstOrDefault(x => x.Id == nodeId && x.OnlineNodeSettings?.IsOnline == true);
 
         private async Task<DeliveryResult> DeliverAsync(string nodeId, OutboxMessage message, CancellationToken cancellationToken)
@@ -252,7 +254,8 @@ namespace RIoT2.Net.Orchestrator.Services.Commands
             var expires = DateTimeOffset.FromUnixTimeMilliseconds(message.ExpiresUtc);
             if (expires <= now)
                 return DeliveryResult.Retry("The time-to-live passed before the command was sent.");
-            var command = Command.Create(message.Payload);
+            // Enqueue serialized the payload from a Command.
+            var command = Command.Create(message.Payload)!;
 
             if (!node.OnlineNodeSettings.HasCapability(Contract.Capabilities.CommandResult))
             {
@@ -297,7 +300,7 @@ namespace RIoT2.Net.Orchestrator.Services.Commands
         }
 
         // What a node's answer means for the delivery: the delivery status, and whether it is final.
-        private static (string Status, DeliveryOutcome Outcome, string Error) Interpret(CommandResult result) => result.Status switch
+        private static (string Status, DeliveryOutcome Outcome, string? Error) Interpret(CommandResult result) => result.Status switch
         {
             CommandResultStatus.Executed => (CommandDeliveryStatus.Executed, DeliveryOutcome.Delivered, null),
             CommandResultStatus.Duplicate => (CommandDeliveryStatus.Duplicate, DeliveryOutcome.Delivered, null),

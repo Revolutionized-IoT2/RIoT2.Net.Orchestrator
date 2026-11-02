@@ -13,7 +13,7 @@ namespace RIoT2.Net.Orchestrator.Models
         public bool Running { get; set; }
 
         /// <summary>The reason the bridge is not running, when it failed to start.</summary>
-        public string Error { get; set; }
+        public string? Error { get; set; }
 
         /// <summary>The name a commissioner shows for the bridge.</summary>
         public string NodeLabel { get; set; }
@@ -25,16 +25,16 @@ namespace RIoT2.Net.Orchestrator.Models
         public ushort Discriminator { get; set; }
 
         /// <summary>The <c>MT:</c> onboarding payload; render this as the scannable QR code.</summary>
-        public string QrCode { get; set; }
+        public string? QrCode { get; set; }
 
         /// <summary>The 11-digit manual pairing code, without separators.</summary>
-        public string ManualCode { get; set; }
+        public string? ManualCode { get; set; }
 
         /// <summary>The manual pairing code grouped as XXXX-XXX-XXXX for display.</summary>
-        public string FormattedManualCode { get; set; }
+        public string? FormattedManualCode { get; set; }
 
         /// <summary>The commissioning window state: <c>WindowNotOpen</c>, <c>BasicWindowOpen</c> or <c>EnhancedWindowOpen</c>.</summary>
-        public string CommissioningWindow { get; set; }
+        public string? CommissioningWindow { get; set; }
 
         /// <summary>The fabrics the bridge has been commissioned into; one per controller ecosystem.</summary>
         public List<MatterFabricStatus> Fabrics { get; set; } = new();

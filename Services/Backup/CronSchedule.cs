@@ -12,7 +12,7 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
             !string.IsNullOrWhiteSpace(expression) && CronExpression.IsValidExpression(expression.Trim());
 
         /// <summary>The first time after <paramref name="after"/>, or <c>null</c> when it never fires again.</summary>
-        public static DateTimeOffset? Next(string expression, DateTimeOffset after, TimeZoneInfo timeZone = null)
+        public static DateTimeOffset? Next(string expression, DateTimeOffset after, TimeZoneInfo? timeZone = null)
         {
             var cron = new CronExpression(expression.Trim()) { TimeZone = timeZone ?? TimeZoneInfo.Local };
             return cron.GetNextValidTimeAfter(after);

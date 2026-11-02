@@ -10,10 +10,11 @@ namespace RIoT2.Net.Orchestrator.Services
     /// </summary>
     public class MessageStateService : IMessageStateService
     {
-        private List<Command> _commands;
-        private List<Report> _reports;
+        // Set by Reset(true) in the constructor.
+        private List<Command> _commands = null!;
+        private List<Report> _reports = null!;
         private static readonly int _maxHistory = 25;
-        Dictionary<string, List<Report>> _history;
+        Dictionary<string, List<Report>> _history = null!;
         private readonly object _sync = new object();
 
         /// <summary>
@@ -30,7 +31,8 @@ namespace RIoT2.Net.Orchestrator.Services
             get
             {
                 lock (_sync)
-                    return _commands.Select(c => new Command { Id = c.Id, Value = c.Value?.Copy() }).ToList();
+                    // A command without a value is copied as it is.
+                    return _commands.Select(c => new Command { Id = c.Id, Value = c.Value?.Copy()! }).ToList();
             }
         }
 
@@ -45,7 +47,7 @@ namespace RIoT2.Net.Orchestrator.Services
         }
 
         /// <inheritdoc/>
-        public IEnumerable<Report> GetHistory(string reportId, int? count = null)
+        public IEnumerable<Report>? GetHistory(string reportId, int? count = null)
         {
             if (count < 0)
                 throw new ArgumentOutOfRangeException(nameof(count));
@@ -92,7 +94,7 @@ namespace RIoT2.Net.Orchestrator.Services
             lock (_sync)
             {
                 _commands.RemoveAll(x => x.Id == command.Id);
-                _commands.Add(new Command { Id = command.Id, Value = command.Value?.Copy() });
+                _commands.Add(new Command { Id = command.Id, Value = command.Value?.Copy()! });
             }
         }
 
@@ -112,7 +114,7 @@ namespace RIoT2.Net.Orchestrator.Services
 
         private static Report CopyReport(Report report) => new Report
         {
-            Id = report.Id, Filter = report.Filter, TimeStamp = report.TimeStamp, Value = report.Value?.Copy()
+            Id = report.Id, Filter = report.Filter, TimeStamp = report.TimeStamp, Value = report.Value?.Copy()!
         };
     }
 }

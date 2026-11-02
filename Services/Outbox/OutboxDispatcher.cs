@@ -17,11 +17,11 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
     /// <param name="Outcome">What happened.</param>
     /// <param name="Detail">The error of a retry or a failure, for the log and <c>last_error</c>.</param>
     /// <param name="Result">What the receiver answered, stored in the row's <c>result</c>, e.g. a command result status.</param>
-    public readonly record struct DeliveryResult(DeliveryOutcome Outcome, string Detail = null, string Result = null)
+    public readonly record struct DeliveryResult(DeliveryOutcome Outcome, string? Detail = null, string? Result = null)
     {
-        public static DeliveryResult Delivered(string result = null) => new(DeliveryOutcome.Delivered, Result: result);
-        public static DeliveryResult Retry(string error) => new(DeliveryOutcome.Retry, error);
-        public static DeliveryResult Failed(string error, string result = null) => new(DeliveryOutcome.Failed, error, result);
+        public static DeliveryResult Delivered(string? result = null) => new(DeliveryOutcome.Delivered, Result: result);
+        public static DeliveryResult Retry(string? error) => new(DeliveryOutcome.Retry, error);
+        public static DeliveryResult Failed(string? error, string? result = null) => new(DeliveryOutcome.Failed, error, result);
     }
 
     /// <summary>
@@ -50,7 +50,7 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
         private long _nextCleanup;
         private long _nextExpiryLog;
         private int _unloggedExpired;
-        private OutboxMessage _lastExpired;
+        private OutboxMessage? _lastExpired;
         private bool _waitingLogged;
 
         /// <param name="store">The outbox.</param>
@@ -219,8 +219,9 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
             }
             if (_unloggedExpired == 0 || now < _nextExpiryLog)
                 return;
+            // _unloggedExpired counts expiries, the last of which set _lastExpired.
             _logger.LogWarning("{Count} {Description}(s) for {Target} expired undelivered; the last one, {MessageId} for {Subject}, after {Attempts} attempts. Last error: {Error}",
-                _unloggedExpired, _description, _target, _lastExpired.Id, _lastExpired.Subject, _lastExpired.Attempts, _lastExpired.LastError ?? "none");
+                _unloggedExpired, _description, _target, _lastExpired!.Id, _lastExpired.Subject, _lastExpired.Attempts, _lastExpired.LastError ?? "none");
             _unloggedExpired = 0;
             _nextExpiryLog = now + (long)ExpiryLogInterval.TotalMilliseconds;
         }

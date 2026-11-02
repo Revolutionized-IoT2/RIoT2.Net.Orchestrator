@@ -43,7 +43,8 @@ namespace RIoT2.Net.Orchestrator.Services.Automation
         {
             ArgumentNullException.ThrowIfNull(report);
             var now = _time.GetUtcNow().ToUnixTimeMilliseconds();
-            var request = new TriggerRequest { Id = report.Id ?? "", Data = report.ToJson() };
+            // ToJson returns null only when serialization throws; the protobuf setter rejects it as before.
+            var request = new TriggerRequest { Id = report.Id ?? "", Data = report.ToJson()! };
             _store.Add(new OutboxMessage
             {
                 Id = Guid.NewGuid().ToString("N"),
@@ -77,7 +78,7 @@ namespace RIoT2.Net.Orchestrator.Services.Automation
                 _logger.LogInformation("{Count} outbox messages are pending; they are delivered after the restart unless their time-to-live has passed", pending);
         }
 
-        private string FindEndpoint()
+        private string? FindEndpoint()
         {
             var workflowNode = _nodes.OnlineNodes.FirstOrDefault(x => x.OnlineNodeSettings?.IsOnline == true && x.OnlineNodeSettings.NodeType == NodeType.Workflow);
             if (workflowNode == null)

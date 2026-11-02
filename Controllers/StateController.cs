@@ -71,7 +71,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
         }
 
         // The ids in a node's own templates are random, so the stored template's address finds the match.
-        private async Task<ReportTemplate> LoadOnlineTemplateAsync(string id)
+        private async Task<ReportTemplate?> LoadOnlineTemplateAsync(string id)
         {
             var configured = _templates.FindReportTemplate(id);
             if (configured == null)

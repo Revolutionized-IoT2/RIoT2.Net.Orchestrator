@@ -21,22 +21,22 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
         /// <summary><c>manual</c> (the API), <c>scheduled</c> or <c>pre-restore</c> (taken before a restore).</summary>
         public string Kind { get; set; }
 
-        public string OrchestratorId { get; set; }
+        public string? OrchestratorId { get; set; }
 
         /// <summary><c>orchestrator</c> and <c>core</c>: the versions that wrote the backup.</summary>
-        public Dictionary<string, string> Versions { get; set; } = [];
+        public Dictionary<string, string?>? Versions { get; set; } = [];
 
-        public List<BackupManifestFile> Files { get; set; } = [];
+        public List<BackupManifestFile>? Files { get; set; } = [];
     }
 
     public sealed class BackupManifestFile
     {
         /// <summary><c>StoredObjects/&lt;Type&gt;/&lt;Id&gt;.json</c> or <c>MatterCredentials/&lt;file&gt;</c>.</summary>
-        public string Path { get; set; }
+        public string? Path { get; set; }
         public long Size { get; set; }
 
         /// <summary>Lowercase hexadecimal SHA-256 of the entry's content.</summary>
-        public string Sha256 { get; set; }
+        public string? Sha256 { get; set; }
     }
 
     /// <summary>An entry of a configuration backup.</summary>

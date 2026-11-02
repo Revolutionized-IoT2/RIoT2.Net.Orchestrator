@@ -6,9 +6,9 @@ namespace RIoT2.Net.Orchestrator.Services;
 internal sealed class WorkflowTriggerClient : IAsyncDisposable
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private GrpcChannel _channel;
-    private RIoTTriggerService.RIoTTriggerServiceClient _client;
-    private Uri _address;
+    private GrpcChannel? _channel;
+    private RIoTTriggerService.RIoTTriggerServiceClient? _client;
+    private Uri? _address;
     private bool _disposed;
 
     public async Task<TriggerResponse> TriggerAsync(string address, TriggerRequest request, CancellationToken cancellationToken, DateTime? deadline = null)
@@ -29,7 +29,8 @@ internal sealed class WorkflowTriggerClient : IAsyncDisposable
                 _client = new RIoTTriggerService.RIoTTriggerServiceClient(channel);
                 _address = uri;
             }
-            return await _client.TriggerAsync(request,
+            // The client is created together with _address, which now equals uri.
+            return await _client!.TriggerAsync(request,
                 deadline: callDeadline, cancellationToken: cancellationToken);
         }
         finally

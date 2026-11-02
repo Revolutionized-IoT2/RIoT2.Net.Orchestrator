@@ -25,7 +25,7 @@ namespace RIoT2.Net.Orchestrator.Services
             _logger = logger;
         }
 
-        public event Action<StoredObjectChange> Changed;
+        public event Action<StoredObjectChange>? Changed;
 
         public IReadOnlyList<T> GetAll<T>() where T : class, IStoredObject
         {
@@ -36,15 +36,15 @@ namespace RIoT2.Net.Orchestrator.Services
             }
         }
 
-        public T Get<T>(string id) where T : class, IStoredObject
+        public T? Get<T>(string id) where T : class, IStoredObject
         {
             lock (_sync)
             {
-                return (T)Objects<T>().FirstOrDefault(x => x.Id == id);
+                return (T?)Objects<T>().FirstOrDefault(x => x.Id == id);
             }
         }
 
-        public string Save<T>(T obj, bool persistent = true) where T : class, IStoredObject
+        public string? Save<T>(T obj, bool persistent = true) where T : class, IStoredObject
         {
             ArgumentNullException.ThrowIfNull(obj);
             OperationType operation;
@@ -90,7 +90,7 @@ namespace RIoT2.Net.Orchestrator.Services
         public void Delete<T>(string id, bool persistent = true) where T : class, IStoredObject
         {
             ArgumentException.ThrowIfNullOrEmpty(id);
-            IStoredObject deleted;
+            IStoredObject? deleted;
             lock (_sync)
             {
                 var objects = Objects<T>();

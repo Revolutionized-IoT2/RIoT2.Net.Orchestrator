@@ -109,7 +109,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
             }
         }
 
-        private async Task<byte[]> ReadBodyAsync(CancellationToken cancellationToken)
+        private async Task<byte[]?> ReadBodyAsync(CancellationToken cancellationToken)
         {
             using var buffer = new MemoryStream();
             var chunk = new byte[81920];

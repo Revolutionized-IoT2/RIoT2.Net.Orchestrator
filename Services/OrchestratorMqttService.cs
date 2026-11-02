@@ -18,7 +18,7 @@ namespace RIoT2.Net.Orchestrator.Services
         private readonly IOnlineNodeService _onlineNodeService;
         private readonly IAutomationProvider _automation;
         private readonly ICommandOutbox _commands;
-        private readonly IMatterReportSink _matterSink;
+        private readonly IMatterReportSink? _matterSink;
         private readonly ILogger _logger;
 
         private string _reportTopic;
@@ -31,10 +31,10 @@ namespace RIoT2.Net.Orchestrator.Services
         private readonly CancellationTokenSource _cts;
         private readonly Task _consumerTask;
         private readonly object _stopGate = new();
-        private Task _stopTask;
+        private Task? _stopTask;
         private int _disposed;
 
-        public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IMessageStateService deviceStateService, IStoredObjectStore storedObjectService, IOnlineNodeService onlineNodeService, IAutomationProvider automation, ICommandOutbox commands, ILogger<OrchestratorMqttService> logger, IMatterReportSink matterSink = null, MqttClient mqttClient = null)
+        public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IMessageStateService deviceStateService, IStoredObjectStore storedObjectService, IOnlineNodeService onlineNodeService, IAutomationProvider automation, ICommandOutbox commands, ILogger<OrchestratorMqttService> logger, IMatterReportSink? matterSink = null, MqttClient? mqttClient = null)
         {
             _logger = logger;
             _storedObjectService = storedObjectService;
@@ -353,7 +353,7 @@ namespace RIoT2.Net.Orchestrator.Services
             }
         }
 
-        private static NodeOnlineMessage ReadOnlineMessage(string json)
+        private static NodeOnlineMessage? ReadOnlineMessage(string json)
         {
             if (string.IsNullOrWhiteSpace(json))
                 return null;
@@ -367,7 +367,7 @@ namespace RIoT2.Net.Orchestrator.Services
             }
         }
 
-        private static string Truncate(string value, int length) =>
+        private static string? Truncate(string? value, int length) =>
             value == null || value.Length <= length ? value : value[..length] + "...";
 
         // Revision and hash let a desired-state node skip a configuration it already runs (design 7.2).

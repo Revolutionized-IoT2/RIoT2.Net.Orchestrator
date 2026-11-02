@@ -45,7 +45,7 @@ namespace RIoT2.Net.Orchestrator.Services
         /// with seconds, in the container's time zone. <c>RIOT2_BACKUP_SCHEDULE</c>; unset or empty turns
         /// scheduled backups off.
         /// </summary>
-        public string BackupSchedule { get; set; }
+        public string? BackupSchedule { get; set; }
 
         /// <summary>
         /// How many backups <c>Backups/</c> keeps; the oldest are deleted. <c>RIOT2_BACKUP_RETENTION</c>,
@@ -57,7 +57,7 @@ namespace RIoT2.Net.Orchestrator.Services
         /// Reads and validates the settings, and throws <see cref="ConfigurationValidationException"/>
         /// listing every problem (logged as critical) when any is missing or invalid.
         /// </summary>
-        public static OrchestratorOptions Load(IConfiguration configuration, ILogger logger = null)
+        public static OrchestratorOptions Load(IConfiguration configuration, ILogger? logger = null)
         {
             var settings = new SettingsReader(configuration);
             var options = new OrchestratorOptions

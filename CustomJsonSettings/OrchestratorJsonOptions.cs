@@ -8,7 +8,7 @@ namespace RIoT2.Net.Orchestrator.CustomJsonSettings
     /// </summary>
     public static class OrchestratorJsonOptions
     {
-        public static void Configure(JsonSerializerOptions options, JsonNamingPolicy naming)
+        public static void Configure(JsonSerializerOptions options, JsonNamingPolicy? naming)
         {
             ArgumentNullException.ThrowIfNull(options);
             options.PropertyNamingPolicy = naming;

@@ -53,9 +53,9 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
 
         private MatterConfiguration _configuration;
         private MatterBridgeState _state;
-        private ControlBridgeService _bridge;
-        private FileFabricPersistence _fabricPersistence;
-        private string _error;
+        private ControlBridgeService? _bridge;
+        private FileFabricPersistence? _fabricPersistence;
+        private string? _error;
 
         public MatterBridgeService(
             MatterConfigurationStore store,
@@ -315,7 +315,8 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
                 _fabricPersistence = FileFabricPersistence.Attach(
                     bridge.Device.Commissioning.Manager,
                     _credentials.FabricFile(_configuration),
-                    _configuration.FabricStoreKey);
+                    // _credentials.Prepare generated the key if it was missing.
+                    _configuration.FabricStoreKey!);
 
                 await bridge.StartAsync(cancellationToken);
                 _bridge = bridge;

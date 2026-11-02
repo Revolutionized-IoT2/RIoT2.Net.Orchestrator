@@ -4,7 +4,7 @@
     {
         public string Expression { get; set; }
         public bool IsValid { get; set; }
-        public string Summary { get; set; } 
+        public string? Summary { get; set; } 
 
     }
 }

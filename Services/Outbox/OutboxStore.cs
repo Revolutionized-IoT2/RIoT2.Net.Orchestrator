@@ -24,7 +24,8 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
         public OutboxStore(string path)
         {
             FilePath = Path.GetFullPath(path);
-            Directory.CreateDirectory(Path.GetDirectoryName(FilePath));
+            // A full file path always has a directory.
+            Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
             // No pooling: closing the store releases the file, so a backup or a test can remove it.
             _connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = FilePath, Pooling = false }.ToString());
             _connection.Open();
@@ -66,16 +67,16 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
                 ("$status", message.Status), ("$result", message.Result), ("$error", message.LastError));
         }
 
-        public OutboxMessage Get(string id) =>
+        public OutboxMessage? Get(string id) =>
             Query($"SELECT {Columns} FROM outbox WHERE id = $id", ("$id", id)).SingleOrDefault();
 
         /// <summary>The oldest pending message for a target: deliveries are FIFO per target.</summary>
-        public OutboxMessage NextPending(string target) =>
+        public OutboxMessage? NextPending(string target) =>
             Query($"SELECT {Columns} FROM outbox WHERE target = $target AND status = 'pending' ORDER BY created_utc, rowid LIMIT 1",
                 ("$target", target)).SingleOrDefault();
 
         /// <summary>Moves a message to a final state.</summary>
-        public void Complete(string id, string status, long now, string result = null, string error = null)
+        public void Complete(string id, string status, long now, string? result = null, string? error = null)
         {
             if (status == OutboxStatus.Pending)
                 throw new ArgumentException("A final status is required.", nameof(status));
@@ -89,7 +90,7 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
         /// receiver got it in time. Returns <c>false</c> when the message is unknown, belongs to
         /// another target or is already final.
         /// </summary>
-        public bool CompleteLate(string id, string target, string status, long now, string result, string error = null)
+        public bool CompleteLate(string id, string target, string status, long now, string? result, string? error = null)
         {
             if (status == OutboxStatus.Pending)
                 throw new ArgumentException("A final status is required.", nameof(status));
@@ -113,7 +114,7 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
         }
 
         /// <summary>Records a failed attempt; the message stays pending until <paramref name="nextAttempt"/>.</summary>
-        public void ScheduleRetry(string id, int attempts, long nextAttempt, long now, string error)
+        public void ScheduleRetry(string id, int attempts, long nextAttempt, long now, string? error)
         {
             Execute("UPDATE outbox SET attempts = $attempts, next_attempt_utc = $next, updated_utc = $now, last_error = $error WHERE id = $id AND status = 'pending'",
                 ("$id", id), ("$attempts", attempts), ("$next", nextAttempt), ("$now", now), ("$error", error));
@@ -200,7 +201,7 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
             }
         }
 
-        private int Execute(string sql, params (string Name, object Value)[] parameters)
+        private int Execute(string sql, params (string Name, object? Value)[] parameters)
         {
             lock (_gate)
             {
@@ -210,7 +211,7 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
             }
         }
 
-        private long? Scalar(string sql, params (string Name, object Value)[] parameters)
+        private long? Scalar(string sql, params (string Name, object? Value)[] parameters)
         {
             lock (_gate)
             {
@@ -220,7 +221,7 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
             }
         }
 
-        private List<OutboxMessage> Query(string sql, params (string Name, object Value)[] parameters)
+        private List<OutboxMessage> Query(string sql, params (string Name, object? Value)[] parameters)
         {
             lock (_gate)
             {
@@ -251,7 +252,7 @@ namespace RIoT2.Net.Orchestrator.Services.Outbox
             }
         }
 
-        private SqliteCommand Command(string sql, params (string Name, object Value)[] parameters)
+        private SqliteCommand Command(string sql, params (string Name, object? Value)[] parameters)
         {
             var command = _connection.CreateCommand();
             command.CommandText = sql;

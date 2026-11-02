@@ -70,8 +70,8 @@ namespace RIoT2.Net.Orchestrator.Controllers
         /// <summary>The body of <c>POST /api/v2/commands</c>.</summary>
         public sealed class CommandRequest
         {
-            public string Id { get; set; }
-            public ValueModel Value { get; set; }
+            public string? Id { get; set; }
+            public ValueModel? Value { get; set; }
 
             /// <summary>Seconds to keep trying, 1–86400; default <c>RIOT2_OUTBOX_COMMAND_TTL</c>.</summary>
             public int? TtlSeconds { get; set; }

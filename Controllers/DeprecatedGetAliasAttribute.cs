@@ -25,7 +25,8 @@ namespace RIoT2.Net.Orchestrator.Controllers
             var successorPath = Successor[(Successor.IndexOf(' ') + 1)..];
             http.Response.Headers["Deprecation"] = "true";
             http.Response.Headers.Link = $"<{successorPath}>; rel=\"successor-version\"";
-            var route = context.ActionDescriptor.AttributeRouteInfo?.Template ?? http.Request.Path.Value;
+            // A request that reached an action has a path.
+            var route = context.ActionDescriptor.AttributeRouteInfo?.Template ?? http.Request.Path.Value!;
             if (_logged.TryAdd(route, true))
                 http.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("RIoT2.Net.Orchestrator.DeprecatedRoutes")
                     .LogWarning("GET /{Route} changes state and is deprecated; use {Successor}. It is removed in a later release",

@@ -19,6 +19,6 @@ namespace RIoT2.Net.Orchestrator.Services.Templates
         IReadOnlyList<VariableTemplate> GetVariableTemplates();
 
         /// <summary>The device report template with the given id, or <see langword="null"/>.</summary>
-        NodeReportTemplate FindReportTemplate(string id);
+        NodeReportTemplate? FindReportTemplate(string id);
     }
 }

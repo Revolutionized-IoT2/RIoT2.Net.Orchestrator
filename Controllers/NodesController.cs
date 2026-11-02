@@ -117,7 +117,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
 
         private NodeDeviceConfiguration WithCurrentStates(NodeDeviceConfiguration configuration)
         {
-            var copy = Json.Deserialize<NodeDeviceConfiguration>(Json.Serialize(configuration));
+            var copy = Json.Deserialize<NodeDeviceConfiguration>(Json.Serialize(configuration))!;
             foreach (var device in copy.DeviceConfigurations ?? [])
             {
                 foreach (var commandTemplate in device.CommandTemplates ?? [])

@@ -193,7 +193,7 @@ namespace RIoT2.Net.Orchestrator.Services.Persistence
             }
         }
 
-        private static (string Type, string Name) SplitObjectPath(string path)
+        private static (string Type, string Name) SplitObjectPath(string? path)
         {
             var parts = path?.Split('/');
             if (parts is not { Length: 2 } || !IsSafeName(parts[0]) || parts[0].StartsWith('.') || !IsObjectFileName(parts[1]))

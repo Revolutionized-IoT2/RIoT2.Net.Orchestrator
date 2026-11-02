@@ -20,7 +20,7 @@ namespace RIoT2.Net.Orchestrator.Services.Persistence
         public static string Serialize<T>(T obj) => JsonSerializer.Serialize(obj, Options(typeof(T)));
 
         /// <exception cref="JsonException">The JSON is invalid or doesn't fit <typeparamref name="T"/>.</exception>
-        public static T Deserialize<T>(string json) =>
+        public static T? Deserialize<T>(string json) =>
             string.IsNullOrWhiteSpace(json) ? default : JsonSerializer.Deserialize<T>(json, Options(typeof(T)));
 
         private static JsonSerializerOptions Options(Type type) =>

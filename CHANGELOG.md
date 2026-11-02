@@ -5,6 +5,17 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.14.1] - 2026-11-02
+
+With RIoT2.Core 1.17.0. No port, user, volume, variable, JSON or API changes.
+
+- Build: nullable reference types ([I32](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i32-nullable-reference-types-m)) are enabled, and CI fails on a nullable warning.
+  MVC keeps treating non-nullable request members as optional
+  (`SuppressImplicitRequiredAttributeForNonNullableReferenceTypes`), so every request that was
+  accepted before still is.
+- Docs: `openapi/riot2-orchestrator.json` follows the annotations. A member that a valid response
+  always carries is no longer marked nullable, and one that can be null (`lastRun`, `oldestPending`)
+  is. Routes and `required` lists are unchanged.
 - Build: the threading analyzers ([I31](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i31-async-cleanup-part-2-and-threading-analyzers-m)) run in every project from the shared
   `Directory.Build.props` and `.editorconfig`: a blocking wait, `async void` or an unobserved task
   fails the CI build. No change to the shipped binaries.

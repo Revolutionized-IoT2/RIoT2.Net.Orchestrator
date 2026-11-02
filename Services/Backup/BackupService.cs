@@ -56,7 +56,7 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
         /// <summary>Set by <see cref="BackupScheduler"/>.</summary>
         public DateTimeOffset? NextRunAt { get; set; }
 
-        public BackupRun LastRun { get; private set; }
+        public BackupRun? LastRun { get; private set; }
 
         /// <summary>Makes a backup of the current configuration; nothing is stopped.</summary>
         public async Task<(string Name, byte[] Content)> CreateAsync(CancellationToken cancellationToken = default)
@@ -105,7 +105,7 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
         };
 
         /// <summary>The full path of a backup in <c>Backups/</c>, or <c>null</c> when there is no such backup.</summary>
-        public string Find(string name)
+        public string? Find(string name)
         {
             if (string.IsNullOrEmpty(name) || !BackupName().IsMatch(name))
                 return null;
@@ -204,7 +204,7 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
                 try
                 {
                     var json = Text(file.Content);
-                    object loaded = type switch
+                    object? loaded = type switch
                     {
                         nameof(NodeDeviceConfiguration) => StoredObjectJson.Deserialize<NodeDeviceConfiguration>(json),
                         nameof(DashboardConfiguration) => StoredObjectJson.Deserialize<DashboardConfiguration>(json),
@@ -303,7 +303,8 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
             foreach (var file in files)
             {
                 var path = Path.GetFullPath(Path.Combine(directory.FullName, file.Path));
-                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                // A full path to a file always has a directory.
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 File.WriteAllBytes(path, file.Content);
             }
         }
@@ -361,7 +362,7 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
                 throw new BackupBusyException();
         }
 
-        private Dictionary<string, string> Versions() => new()
+        private Dictionary<string, string?> Versions() => new()
         {
             ["orchestrator"] = _configuration.OrchestratorConfiguration?.Manifest?.Version
                 ?? typeof(BackupService).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,

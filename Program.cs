@@ -41,7 +41,8 @@ var orchestratorOptions = generatingOpenApiDocument
 builder.Services.AddSingleton(Options.Create(orchestratorOptions));
 
 // Add services to the container.
-builder.Services.AddControllers()
+// Nullable annotations must not change request validation (plan M8 step 9).
+builder.Services.AddControllers(o => o.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true)
     .AddJsonOptions(o => OrchestratorJsonOptions.Configure(o.JsonSerializerOptions, JsonNamingPolicy.CamelCase))
     // Deprecated (NamingPolicyHeaderDeprecation): the json-naming-policy header's "pascal" (the C# names)
     // and "lower" variants.
@@ -134,8 +135,8 @@ if (!generatingOpenApiDocument)
     IHostApplicationLifetime lifetime = app.Lifetime;
     lifetime.ApplicationStarted.Register(() =>
     {
-        foreach (var variable in app.Services.GetService<IStoredObjectStore>().GetAll<Variable>())
-            app.Services.GetService<IMessageStateService>().SetState(variable.CreateReport());
+        foreach (var variable in app.Services.GetService<IStoredObjectStore>()!.GetAll<Variable>())
+            app.Services.GetService<IMessageStateService>()!.SetState(variable.CreateReport());
     });
 }
 
