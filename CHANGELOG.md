@@ -5,6 +5,12 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+- Build: the threading analyzers ([I31](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i31-async-cleanup-part-2-and-threading-analyzers-m)) run in every project from the shared
+  `Directory.Build.props` and `.editorconfig`: a blocking wait, `async void` or an unobserved task
+  fails the CI build. No change to the shipped binaries.
+- Changed: the MQTT work queue takes an item without waiting when there is room; it only blocks the
+  change event (deliberate backpressure, a justified suppression) when the queue is full.
+
 ## [1.14.0] - 2026-11-02
 
 Typed device options ([I30](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i30-typed-device-options-m)), with RIoT2.Core 1.16.0. No port, user, volume, variable or

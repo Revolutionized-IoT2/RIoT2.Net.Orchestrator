@@ -101,7 +101,11 @@ namespace RIoT2.Net.Orchestrator.Services
             try
             {
                 // The event contract is synchronous: apply backpressure instead of silently losing state.
+                if (_workQueue.Writer.TryWrite(work))
+                    return;
+#pragma warning disable VSTHRD002 // Deliberate backpressure behind the synchronous change event (plan M11 group D).
                 _workQueue.Writer.WriteAsync(work, _cts.Token).AsTask().GetAwaiter().GetResult();
+#pragma warning restore VSTHRD002
             }
             catch (OperationCanceledException) when (_cts.IsCancellationRequested)
             {
@@ -138,7 +142,9 @@ namespace RIoT2.Net.Orchestrator.Services
 
         public void Dispose()
         {
+#pragma warning disable VSTHRD002 // IDisposable is synchronous; the host disposes asynchronously.
             DisposeAsync().AsTask().GetAwaiter().GetResult();
+#pragma warning restore VSTHRD002
         }
 
         public async ValueTask DisposeAsync()
