@@ -14,6 +14,9 @@ namespace RIoT2.Net.Orchestrator.Services
         NodeStatusMessage? GetStatus(string id);
 
         Task<List<Node>> GetNodesAsync();
+
+        /// <summary>Every configured node's sync state (design 7.2 phase 6), without asking the nodes anything.</summary>
+        List<NodeSync> GetSyncStates();
         Task<List<DeviceStatus>?> LoadDeviceStatusFromNodeAsync(string nodeId);
         Task<List<DeviceConfiguration>?> LoadDeviceConfigurationTemplateAsync(string id);
         Task<Dictionary<string, List<DeviceConfiguration>?>> LoadDeviceConfigurationTemplatesAsync();

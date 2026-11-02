@@ -5,6 +5,20 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-11-02
+
+Sync status for the UI ([I36](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-3-4.md#i36-sync-and-command-status-in-the-ui-m), [design 7.2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/desired-state-configuration.md) phase 6), with RIoT2.Core 1.19.0. No
+port, user, volume or variable changes; additive JSON.
+
+- Added: `GET /api/v2/nodes/sync`, every configured node's sync (`isOnline`, `pluginManifest`,
+  `desiredRevision`, `appliedRevision`, `syncState`, `configurationState`, `lastError`,
+  `failedDevices`) without asking the nodes for their device states, for the UI to poll.
+- Added: `POST /api/v2/nodes/{id}/configuration/apply` (Operator) sends the node its configuration
+  command again ("re-apply"): `202`, `404` for an unknown node, `409` while it is offline.
+- Added: `GET /api/nodes` also reports `configurationState` and `failedDevices`; `pluginManifest`
+  falls back to the one in the node's retained status while it is offline, and carries
+  `coreVersion` and `sha256` (Core 1.19.0).
+
 ## [1.15.0] - 2026-11-02
 
 The optional security mode's seams ([I34](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i34-security-seams-with-the-mode-fixed-at-off-m), [design 7.5](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/security-mode.md) phase S0), with RIoT2.Core 1.18.0. No port, user,

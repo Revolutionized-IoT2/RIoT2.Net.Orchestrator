@@ -22,5 +22,11 @@ namespace RIoT2.Net.Orchestrator.Models
 
         /// <summary>The error of the node's last failed configuration, if any.</summary>
         public string? LastError { get; set; }
+
+        /// <summary>The state the node last reported (<c>applying</c>, <c>applied</c>, <c>failed</c>, <c>pendingRestart</c>); <c>null</c> when none.</summary>
+        public string? ConfigurationState { get; set; }
+
+        /// <summary>Configured devices that aren't running, as the node reported them; <c>null</c> when none.</summary>
+        public List<FailedDevice>? FailedDevices { get; set; }
     }
 }

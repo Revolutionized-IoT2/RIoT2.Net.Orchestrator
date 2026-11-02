@@ -87,26 +87,51 @@ namespace RIoT2.Net.Orchestrator.Services
             var tasks = _configuration.NodeConfigurations.Select(async conf =>
             {
                 _onlineNodes.TryGetValue(conf.Id, out var onlineNode);
-                var status = GetStatus(conf.Id);
+                var sync = Sync(conf, onlineNode);
                 var deviceStatuses = await LoadDeviceStatusFromNodeAsync(conf.Id);
 
                 return new Node()
                 {
                     Id = conf.Id,
                     Name = conf.Name,
-                    IsOnline = onlineNode?.OnlineNodeSettings?.IsOnline == true,
+                    IsOnline = sync.IsOnline,
                     DeviceStatuses = deviceStatuses,
                     Manifest = onlineNode?.OnlineNodeSettings.Manifest,
-                    PluginManifest = onlineNode?.OnlineNodeSettings.PluginManifest,
-                    DesiredRevision = conf.Revision,
-                    AppliedRevision = status?.AppliedRevision,
-                    SyncState = SyncState(conf, onlineNode, status),
-                    LastError = status?.Error
+                    PluginManifest = sync.PluginManifest,
+                    DesiredRevision = sync.DesiredRevision,
+                    AppliedRevision = sync.AppliedRevision,
+                    SyncState = sync.SyncState,
+                    LastError = sync.LastError,
+                    ConfigurationState = sync.ConfigurationState,
+                    FailedDevices = sync.FailedDevices
                 };
             });
 
             var nodes = await Task.WhenAll(tasks);
             return nodes.ToList();
+        }
+
+        public List<NodeSync> GetSyncStates() => _configuration.NodeConfigurations
+            .Select(conf => Sync(conf, _onlineNodes.TryGetValue(conf.Id, out var online) ? online : null))
+            .ToList();
+
+        private NodeSync Sync(NodeDeviceConfiguration conf, OnlineNode? onlineNode)
+        {
+            var status = GetStatus(conf.Id);
+            return new NodeSync
+            {
+                Id = conf.Id,
+                Name = conf.Name,
+                IsOnline = onlineNode?.OnlineNodeSettings?.IsOnline == true,
+                // The status carries the manifest too, also while the node is offline.
+                PluginManifest = onlineNode?.OnlineNodeSettings?.PluginManifest ?? status?.PluginManifest,
+                DesiredRevision = conf.Revision,
+                AppliedRevision = status?.AppliedRevision,
+                SyncState = SyncState(conf, onlineNode, status),
+                ConfigurationState = status?.State,
+                LastError = status?.Error,
+                FailedDevices = status?.FailedDevices is { Count: > 0 } failed ? failed : null
+            };
         }
 
         public async Task<List<DeviceConfiguration>?> LoadDeviceConfigurationTemplateAsync(string id) 

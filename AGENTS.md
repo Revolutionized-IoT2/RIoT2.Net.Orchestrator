@@ -118,7 +118,7 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
 - Use `RIoT2.Core.Constants.Get` / `GetTopicId` for topics and Core `Json.Serialize` /
   `Json.SerializeIgnoreNulls` for wire payloads that use Core models.
 - Keep the Core and Matter packages as package references: the Dockerfile restores from GitHub
-  Packages. Pins: `RIoT2.Core.Contracts`, `.Http`, `.Mqtt` and `.Hosting` `1.18.0` (never the facade
+  Packages. Pins: `RIoT2.Core.Contracts`, `.Http`, `.Mqtt` and `.Hosting` `1.19.0` (never the facade
   or `.Node`; Quartz is a direct reference), `RIoT2.Matter` and
   `RIoT2.Matter.ControlBridge` `1.0.0`, and the transitive `System.Security.Cryptography.Pkcs`
   `10.0.14` (drop it once RIoT2.Matter brings a patched one). Use `C:\Src\RIoT2\.localfeed` only to
