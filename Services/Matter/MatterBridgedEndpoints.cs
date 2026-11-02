@@ -59,6 +59,12 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         /// so a controller keeps its subscriptions. New endpoint ids go into the endpoint map of
         /// <paramref name="state"/>, which is saved when it changes.
         /// </summary>
+        /// <remarks>
+        /// Endpoint ids are stable (ADR 0010): an endpoint gets the id recorded for its key, also after a
+        /// restart, a changed declaration, or a while without a declaration. An endpoint without a
+        /// recorded id gets one above every id ever recorded, so it never takes the id of an endpoint that
+        /// is only gone for now (Matter Core Specification 9.12: a bridge doesn't reuse an endpoint id).
+        /// </remarks>
         /// <exception cref="InvalidOperationException">Two devices declare the same endpoint key.</exception>
         public async Task ReconcileAsync(AggregatorEndpoint aggregator, MatterBridgeState state, CancellationToken cancellationToken = default)
         {
@@ -96,7 +102,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
                         continue;
                     try
                     {
-                        var adapter = await AddAsync(aggregator, state, definition.NodeId, definition.Device, definition.Template, online, cancellationToken);
+                        var adapter = await AddAsync(aggregator, state, adapters, definition.NodeId, definition.Device, definition.Template, online, cancellationToken);
                         adapters.Add(adapter);
                         _adapterSignatures[key] = definition.Signature;
                         var assigned = adapter.Device!.EndpointId.Value;
@@ -229,6 +235,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
         private async Task<RiotBridgedDeviceAdapter> AddAsync(
             AggregatorEndpoint aggregator,
             MatterBridgeState state,
+            IReadOnlyList<RiotBridgedDeviceAdapter> current,
             string nodeId,
             DeviceConfiguration device,
             MatterEndpointTemplate template,
@@ -261,14 +268,24 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
             };
 
             // A known endpoint id is offered back to the aggregator so a controller keeps pointing at the
-            // same device across restarts; an unknown one is allocated sequentially.
-            EndpointId? preferred = state.EndpointMap.TryGetValue(key, out var mapped) ? new EndpointId(mapped) : null;
+            // same device across restarts; an unknown one gets the next id no endpoint ever had.
+            var inUse = current.Where(a => a.Device is not null).Select(a => a.Device!.EndpointId.Value).ToHashSet();
+            var preferred = state.EndpointMap.TryGetValue(key, out var mapped) && !inUse.Contains(mapped)
+                ? new EndpointId(mapped)
+                : NextUnusedEndpointId(aggregator, state, inUse);
 
             await aggregator.AddBridgedDeviceAsync(definition, adapter, preferred, cancellationToken);
             return adapter;
         }
 
         internal static string EndpointKey(string deviceId, string templateId) => $"{deviceId}:{templateId}";
+
+        // Above the aggregator, every recorded id and every id in use.
+        internal static EndpointId NextUnusedEndpointId(AggregatorEndpoint aggregator, MatterBridgeState state, IEnumerable<ushort> inUse)
+        {
+            var highest = state.EndpointMap.Values.Concat(inUse).Append(aggregator.Endpoint.Id.Value).Max();
+            return new EndpointId(checked((ushort)(highest + 1)));
+        }
 
         /// <summary>
         /// Derives the Bridged Device Basic Information UniqueId, which the specification limits to 32

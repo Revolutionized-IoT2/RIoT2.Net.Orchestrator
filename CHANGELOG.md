@@ -5,6 +5,19 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-11-02
+
+Matter completion ([I43](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-3-4.md#i43-matter-completion-m), ADR 0010), with RIoT2.Matter 1.1.0. No port, user, volume, variable or
+JSON changes.
+
+- Fixed: a bridged endpoint keeps its endpoint id when the configuration changes. After a restart, an
+  endpoint with no recorded id could take the id recorded for another one that was later in the
+  configuration or temporarily removed, so Google Home showed the wrong device under the old one. A new
+  endpoint now gets an id above every id ever recorded (`MatterBridgedEndpoints.NextUnusedEndpointId`).
+- Changed (RIoT2.Matter 1.1.0): bindings written by a Matter controller reach their peers through
+  DNS-SD, and are tried again every 30 s; the Matter stack's session and peer tables are bounded, PASE
+  arithmetic is constant-time and its ids are unpredictable (backlog item 8, S10).
+
 ## [1.17.0] - 2026-11-02
 
 Connectors for the UI ([I39](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-3-4.md#i39-connectors-in-the-ui-and-a-prometheus-exporter-m), [design 7.3](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/connector-sdk.md) phase 3), with RIoT2.Core 1.22.0. No port, user, volume or

@@ -118,15 +118,15 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
 - Use `RIoT2.Core.Constants.Get` / `GetTopicId` for topics and Core `Json.Serialize` /
   `Json.SerializeIgnoreNulls` for wire payloads that use Core models.
 - Keep the Core and Matter packages as package references: the Dockerfile restores from GitHub
-  Packages. Pins: `RIoT2.Core.Contracts`, `.Http`, `.Mqtt` and `.Hosting` `1.19.0` (never the facade
-  or `.Node`; Quartz is a direct reference), `RIoT2.Matter` and
-  `RIoT2.Matter.ControlBridge` `1.0.0`, and the transitive `System.Security.Cryptography.Pkcs`
-  `10.0.14` (drop it once RIoT2.Matter brings a patched one). Use `C:\Src\RIoT2\.localfeed` only to
-  try unreleased versions.
+  Packages. Pins: `RIoT2.Core.Contracts`, `.Http`, `.Mqtt` and `.Hosting` `1.22.0` (never the facade
+  or `.Node`; Quartz is a direct reference), `RIoT2.Matter` and `.ControlBridge` `1.1.0`, and the
+  transitive `System.Security.Cryptography.Pkcs` `10.0.14`. `.localfeed` is only for unreleased versions.
 - `FileObjectStore` must validate type names and ids as file names. Never build persistence paths
   from raw ids.
 - Matter generated credentials and the fabric store must stay under a content-root-relative
   `CredentialsDirectory` (default `MatterCredentials`); reject absolute or escaping paths.
+- Bridged endpoint ids are stable (ADR 0010): never prune `MatterBridgeState.EndpointMap`; a new
+  endpoint takes `NextUnusedEndpointId` (`MatterEndpointStabilityTests` in RIoT2.Tests).
 - Images must not contain credentials, IDs, IPs, `StoredObjects`, logs or local settings.
 - Keep the image on port `8080` and the non-root .NET app user.
 - Elsa 3 is the only automation engine; don't reintroduce the rule engine.

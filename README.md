@@ -99,6 +99,9 @@ The Matter Control Bridge is disabled by default. Enable and configure it throug
 `MatterConfiguration.CredentialsDirectory`, which must be relative to the content root and defaults
 to `MatterCredentials`.
 
+Bridged endpoint ids never change (1.18.0): each is recorded per device and template, and a new
+endpoint gets an id no endpoint ever had. Controller bindings reach their peers through DNS-SD.
+
 ## Backup and restore
 
 `POST /api/v2/backup` returns a zip of `StoredObjects/` (without the outbox) and the Matter
