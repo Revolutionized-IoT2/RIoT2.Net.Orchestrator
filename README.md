@@ -18,7 +18,7 @@ How the orchestrator fits into the platform:
 | Path | Contents |
 | --- | --- |
 | `Program.cs` | Host setup, logging, security seams, JSON profiles, health checks and DI registration |
-| `Controllers/` | REST API controllers for nodes, templates, state, dashboard, variables, commands, reports, Matter, the outbox and backups |
+| `Controllers/` | REST API controllers for nodes, connectors, templates, state, dashboard, variables, commands, reports, Matter, the outbox and backups |
 | `Services/OrchestratorOptions.cs` | The `RIOT2_*` settings, read and validated at startup |
 | `Services/OrchestratorConfigurationService.cs` | Settings, stored configuration and template lookup |
 | `Services/OrchestratorMqttService.cs` | MQTT report/command routing and state updates; reports go on to the automation provider, commands to the command outbox |

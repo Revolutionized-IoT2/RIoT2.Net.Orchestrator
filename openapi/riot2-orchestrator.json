@@ -543,6 +543,44 @@
         }
       }
     },
+    "/api/v2/connectors": {
+      "get": {
+        "tags": [
+          "Connectors"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ConnectorInfo"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ConnectorInfo"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ConnectorInfo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/Nodes/validatecron": {
       "post": {
         "tags": [
@@ -1564,6 +1602,49 @@
           }
         }
       },
+      "ConnectorInfo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodeBaseUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "manifest": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PackageManifest"
+              }
+            ]
+          },
+          "health": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "healthError": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "CronValidationResult": {
         "type": "object",
         "properties": {
@@ -2054,6 +2135,9 @@
     },
     {
       "name": "Commands"
+    },
+    {
+      "name": "Connectors"
     },
     {
       "name": "Nodes"

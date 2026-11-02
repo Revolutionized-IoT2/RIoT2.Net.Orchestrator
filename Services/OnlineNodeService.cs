@@ -115,6 +115,67 @@ namespace RIoT2.Net.Orchestrator.Services
             .Select(conf => Sync(conf, _onlineNodes.TryGetValue(conf.Id, out var online) ? online : null))
             .ToList();
 
+        /// <summary>
+        /// How long <see cref="GetConnectorsAsync"/> waits for a connector's <c>/health</c>: longer than the 5 s the
+        /// connector gives its own target, so a hanging target shows as degraded, not as an unreachable connector.
+        /// </summary>
+        internal static readonly TimeSpan ConnectorHealthTimeout = TimeSpan.FromSeconds(8);
+
+        public async Task<List<ConnectorInfo>> GetConnectorsAsync(CancellationToken cancellationToken = default)
+        {
+            var connectors = _onlineNodes.Values
+                .Where(node => node.OnlineNodeSettings?.IsOnline == true && node.OnlineNodeSettings.NodeType == NodeType.Connector)
+                .OrderBy(node => string.IsNullOrEmpty(node.OnlineNodeSettings.Name) ? node.Id : node.OnlineNodeSettings.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(node => node.Id, StringComparer.Ordinal)
+                .Select(async node =>
+                {
+                    var settings = node.OnlineNodeSettings;
+                    var info = new ConnectorInfo
+                    {
+                        Id = node.Id,
+                        Name = string.IsNullOrEmpty(settings.Name) ? node.Id : settings.Name,
+                        NodeBaseUrl = string.IsNullOrWhiteSpace(settings.NodeBaseUrl) ? null : settings.NodeBaseUrl,
+                        Manifest = settings.Manifest
+                    };
+                    if (info.NodeBaseUrl != null)
+                        (info.Health, info.HealthError) = await LoadConnectorHealthAsync(info.NodeBaseUrl, cancellationToken);
+                    return info;
+                });
+            return [.. await Task.WhenAll(connectors)];
+        }
+
+        // The connector's /health body, also with 503 (unhealthy still carries the report).
+        private async Task<(System.Text.Json.JsonElement? Health, string? Error)> LoadConnectorHealthAsync(string baseUrl, CancellationToken cancellationToken)
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(ConnectorHealthTimeout);
+            try
+            {
+                using var response = await NodeClient().GetAsync(baseUrl.TrimEnd('/') + "/health", timeout.Token);
+                var body = await response.Content.ReadAsStringAsync(timeout.Token);
+                try
+                {
+                    using var document = System.Text.Json.JsonDocument.Parse(body);
+                    if (document.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+                        return (document.RootElement.Clone(), null);
+                }
+                catch (System.Text.Json.JsonException)
+                {
+                    // Reported below.
+                }
+                return (null, $"HTTP {(int)response.StatusCode} without a health report");
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return (null, $"No answer within {ConnectorHealthTimeout.TotalSeconds:0} s");
+            }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                _logger.LogDebug(error, "Could not read the health of the connector at {Url}", baseUrl);
+                return (null, error.Message);
+            }
+        }
+
         private NodeSync Sync(NodeDeviceConfiguration conf, OnlineNode? onlineNode)
         {
             var status = GetStatus(conf.Id);

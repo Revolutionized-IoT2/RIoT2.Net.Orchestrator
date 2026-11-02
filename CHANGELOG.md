@@ -5,6 +5,16 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-11-02
+
+Connectors for the UI ([I39](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-3-4.md#i39-connectors-in-the-ui-and-a-prometheus-exporter-m), [design 7.3](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/connector-sdk.md) phase 3), with RIoT2.Core 1.22.0. No port, user, volume or
+variable changes; additive JSON.
+
+- Added: `GET /api/v2/connectors`: the online connectors (`nodeType` 4) with their name, `nodeBaseUrl`
+  and manifest, and each one's own `/health` body (read in parallel, 8 s each; also with 503), or
+  `healthError` when it doesn't answer.
+- Changed: `riot2.nodes.online` counts connectors as `type="connector"` (they were `unknown`).
+
 ## [1.16.0] - 2026-11-02
 
 Sync status for the UI ([I36](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-3-4.md#i36-sync-and-command-status-in-the-ui-m), [design 7.2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/desired-state-configuration.md) phase 6), with RIoT2.Core 1.19.0. No
