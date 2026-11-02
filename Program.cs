@@ -12,6 +12,7 @@ using RIoT2.Net.Orchestrator.Services.Persistence;
 using RIoT2.Net.Orchestrator.Services.Templates;
 using RIoT2.Core.Diagnostics;
 using RIoT2.Core.Hosting;
+using RIoT2.Core.Security;
 using System.Text.Json;
 
 // Workflow nodes (e.g. Elsa) are reached over plain HTTP; allow cleartext HTTP/2 so Grpc.Net.Client can call them.
@@ -106,16 +107,17 @@ if (!generatingOpenApiDocument)
     builder.Services.AddHostedService<BackupScheduler>();
 }
 
-builder.Services.AddCors(options =>
-{
-    options.AddDefaultPolicy(
-        policy =>
-        {
-            policy.AllowAnyOrigin()
-            .AllowAnyMethod()
-            .AllowAnyHeader();
-        });
-});
+// The optional security mode's seams (design 7.5, phase S0): every controller action has a Viewer,
+// Operator or Admin policy, which the LocalTrust scheme passes while RIOT2_SECURITY_MODE is off (the
+// only mode this version accepts); CORS allows any origin, and every outbound URL is allowed.
+builder.Services.AddRIoT2Security(orchestratorOptions.Security);
+
+// Calls to nodes send X-RIoT2-Key when RIOT2_API_KEY is set; every outbound client passes the policy.
+builder.Services.AddHttpClient(OnlineNodeService.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(60))
+    .AddHttpMessageHandler(() => new ApiKeyHandler(orchestratorOptions.Security.ApiKey))
+    .AddHttpMessageHandler(services => new OutboundUrlPolicyHandler(services.GetRequiredService<IOutboundUrlPolicy>(), OutboundPurposes.Node));
+builder.Services.AddHttpClient(PluginsController.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(60))
+    .AddHttpMessageHandler(services => new OutboundUrlPolicyHandler(services.GetRequiredService<IOutboundUrlPolicy>(), OutboundPurposes.Plugin));
 
 var app = builder.Build();
 
@@ -144,13 +146,12 @@ if (!generatingOpenApiDocument)
 
 //app.UseHttpsRedirection();
 
-app.UseAuthorization();
-
-app.UseCors();
+app.UseRIoT2Security();
 
 app.UseMiddleware<NamingPolicyHeaderDeprecation>();
 
 app.MapHealthChecks("/health").AllowAnonymous();
+app.MapRIoT2SecurityInfo();
 app.MapControllers();
 
 app.Run();

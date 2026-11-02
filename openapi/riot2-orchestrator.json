@@ -5,6 +5,26 @@
     "version": "1.0.0"
   },
   "paths": {
+    "/api/security/info": {
+      "get": {
+        "tags": [
+          "Security"
+        ],
+        "operationId": "GetSecurityInfo",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/backup": {
       "post": {
         "tags": [
@@ -1755,6 +1775,26 @@
           }
         }
       },
+      "SecurityInfo": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string"
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "loginRequired": {
+            "type": "boolean"
+          },
+          "realtime": {
+            "type": "string"
+          }
+        }
+      },
       "Stream": {
         "type": "string",
         "format": "binary"
@@ -1794,6 +1834,9 @@
     }
   },
   "tags": [
+    {
+      "name": "Security"
+    },
     {
       "name": "Backup"
     },

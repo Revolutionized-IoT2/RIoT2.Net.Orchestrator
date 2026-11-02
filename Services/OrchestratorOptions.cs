@@ -29,6 +29,12 @@ namespace RIoT2.Net.Orchestrator.Services
         public TelemetryOptions Telemetry { get; set; } = new();
 
         /// <summary>
+        /// <c>RIOT2_SECURITY_MODE</c>, <c>RIOT2_SECURITY_FEATURES</c>, <c>RIOT2_API_KEY</c> and
+        /// <c>RIOT2_CORS_ORIGINS</c> (design 7.5); this version accepts the mode <c>off</c> only.
+        /// </summary>
+        public SecurityOptions Security { get; set; } = new();
+
+        /// <summary>
         /// How long a workflow trigger waits in the outbox for delivery before it expires (design 7.1).
         /// <c>RIOT2_OUTBOX_WORKFLOW_TTL</c> in seconds, 1–86400; default 300.
         /// </summary>
@@ -67,6 +73,7 @@ namespace RIoT2.Net.Orchestrator.Services
                 Mqtt = MqttOptions.Read(settings),
                 Logging = LoggingOptions.Read(settings),
                 Telemetry = TelemetryOptions.Read(settings),
+                Security = SecurityOptions.Read(settings),
                 WorkflowTriggerTtl = TimeSpan.FromSeconds(settings.Integer(WorkflowTriggerTtlVariable, 300, 1, 86400)),
                 CommandTtl = TimeSpan.FromSeconds(settings.Integer(CommandTtlVariable, 30, 1, 86400)),
                 BackupSchedule = settings.Optional(BackupScheduleVariable)?.Trim(),

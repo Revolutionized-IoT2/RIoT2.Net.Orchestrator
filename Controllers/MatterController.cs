@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using QRCoder;
+using RIoT2.Core.Security;
 using RIoT2.Net.Orchestrator.Services.Matter;
 
 namespace RIoT2.Net.Orchestrator.Controllers
@@ -10,6 +12,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
     /// </summary>
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Policy = SecurityPolicies.Viewer)]
     public class MatterController : ControllerBase
     {
         private IMatterBridgeService _bridge;
@@ -34,6 +37,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
 
         /// <summary>Saves the configuration and restarts the bridge so the new identity takes effect.</summary>
         [HttpPost("configuration")]
+        [Authorize(Policy = SecurityPolicies.Admin)]
         public async Task<IActionResult> SaveConfigurationAsync([FromBody] MatterConfiguration configuration)
         {
             if (configuration == null)
@@ -58,6 +62,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
         /// Renders the onboarding payload as a PNG so the user can scan it with the Google Home app.
         /// </summary>
         [HttpGet("qr")]
+        [Authorize(Policy = SecurityPolicies.Admin)]
         public IActionResult GetQrCode()
         {
             var status = _bridge.GetStatus();
@@ -76,6 +81,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
         [HttpGet("commissioning/open")]
         [HttpPost("/api/v2/matter/commissioning/open")]
         [DeprecatedGetAlias("POST /api/v2/matter/commissioning/open")]
+        [Authorize(Policy = SecurityPolicies.Admin)]
         public IActionResult OpenCommissioning()
         {
             try
@@ -93,6 +99,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
         [HttpGet("devices/refresh")]
         [HttpPost("/api/v2/matter/devices/refresh")]
         [DeprecatedGetAlias("POST /api/v2/matter/devices/refresh")]
+        [Authorize(Policy = SecurityPolicies.Admin)]
         public async Task<IActionResult> RefreshDevicesAsync()
         {
             try
@@ -113,6 +120,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
         [HttpGet("reset")]
         [HttpPost("/api/v2/matter/reset")]
         [DeprecatedGetAlias("POST /api/v2/matter/reset")]
+        [Authorize(Policy = SecurityPolicies.Admin)]
         public async Task<IActionResult> ResetAsync()
         {
             try

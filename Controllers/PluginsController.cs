@@ -1,7 +1,7 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using RIoT2.Core.Utils;
+using RIoT2.Core.Security;
 using RIoT2.Net.Orchestrator.Models;
-using System.Net.Http.Headers;
 
 namespace RIoT2.Net.Orchestrator.Controllers
 {
@@ -11,14 +11,19 @@ namespace RIoT2.Net.Orchestrator.Controllers
     [Route("api/Nodes")]
     [Tags("Nodes")]
     [ApiController]
-    public class PluginsController : ControllerBase
+    [Authorize(Policy = SecurityPolicies.Viewer)]
+    public class PluginsController(IHttpClientFactory httpClientFactory) : ControllerBase
     {
+        /// <summary>The <c>IHttpClientFactory</c> client that checks plugin URLs; it passes the outbound URL policy (design 7.5).</summary>
+        public const string HttpClientName = "riot2-plugins";
+
         /// <summary>
         /// Fills in the plugin's file name from the URL's response headers, or its error message when
         /// the URL is missing, invalid or unreachable.
         /// </summary>
         [HttpPost("checkplugin")]
-        public async Task<IActionResult> CheckPlugin([FromBody] PluginFile plugin)
+        [Authorize(Policy = SecurityPolicies.Admin)]
+        public async Task<IActionResult> CheckPlugin([FromBody] PluginFile plugin, CancellationToken cancellationToken = default)
         {
             try
             {
@@ -38,24 +43,17 @@ namespace RIoT2.Net.Orchestrator.Controllers
                     return Ok(plugin);
                 }
 
-                HttpContentHeaders metadata;
                 try
                 {
-                    metadata = await Web.GetUrlMetadata(plugin.Url);
+                    using var request = new HttpRequestMessage(HttpMethod.Head, plugin.Url);
+                    using var response = await httpClientFactory.CreateClient(HttpClientName).SendAsync(request, cancellationToken);
+                    response.EnsureSuccessStatusCode();
+                    plugin.Name = response.Content.Headers.ContentDisposition?.FileName ?? "";
                 }
-                catch (Exception x)
+                catch (Exception x) when (!cancellationToken.IsCancellationRequested)
                 {
                     plugin.ErrorMessage = x.Message;
-                    return Ok(plugin);
                 }
-
-                if (metadata == null)
-                {
-                    plugin.ErrorMessage = "Plugin Url is not valid or accessible";
-                    return Ok(plugin);
-                }
-
-                plugin.Name = metadata.ContentDisposition?.FileName ?? "";
                 return Ok(plugin);
             }
             catch (Exception x)

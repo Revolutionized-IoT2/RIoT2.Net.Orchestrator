@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using RIoT2.Core.Models;
+using RIoT2.Core.Security;
 using RIoT2.Core.Utils;
 using System.Text;
 using RIoT2.Net.Orchestrator.Services;
@@ -8,6 +10,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Policy = SecurityPolicies.Viewer)]
     public class CommandController : ControllerBase
     {
         private readonly IOrchestratorConfigurationService _configuration;
@@ -46,6 +49,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
         /// </summary>
         /// <returns>OK if the command was executed successfully, otherwise BadRequest.</returns>
         [HttpPost("execute")]
+        [Authorize(Policy = SecurityPolicies.Operator)]
         public async Task<IActionResult> ExecuteCommand()
         {
             string json;

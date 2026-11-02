@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RIoT2.Core.Security;
 using RIoT2.Net.Orchestrator.Services;
 using RIoT2.Net.Orchestrator.Services.Templates;
 
@@ -10,6 +12,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
     /// they used to live in.
     /// </summary>
     [ApiController]
+    [Authorize(Policy = SecurityPolicies.Viewer)]
     public class TemplatesController : ControllerBase
     {
         private readonly ITemplateCatalog _templates;

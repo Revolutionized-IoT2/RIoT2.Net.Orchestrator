@@ -5,6 +5,24 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-11-02
+
+The optional security mode's seams ([I34](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i34-security-seams-with-the-mode-fixed-at-off-m), [design 7.5](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/security-mode.md) phase S0), with RIoT2.Core 1.18.0. No port, user,
+volume or JSON changes; with the default mode `off` nothing is enforced.
+
+- Added: `GET /api/security/info` (anonymous): `{ "mode": "off", "features": [], "loginRequired":
+  false, "realtime": "mqtt" }`. It is in `openapi/riot2-orchestrator.json`.
+- Added: every controller action has a policy. Reads are `Viewer`; commands and report states
+  `Operator`; node, variable, dashboard, Matter (including the QR code), plugin-check and backup
+  writes `Admin`. The `LocalTrust` scheme passes them all while the mode is `off`.
+- Added: `RIOT2_SECURITY_MODE` (only `off` is accepted; `audit` or `on` stops the start),
+  `RIOT2_SECURITY_FEATURES`, `RIOT2_API_KEY` (sent in `X-RIoT2-Key` to nodes and to Elsa's gRPC
+  endpoint) and `RIOT2_CORS_ORIGINS` (used once the `api` feature exists; any origin while `off`).
+- Added: `RIOT2_MQTT_TLS` and `RIOT2_MQTT_CA_FILE` connect to a TLS broker.
+- Changed: calls to nodes and plugin URL checks use `IHttpClientFactory` clients (`riot2-nodes`,
+  `riot2-plugins`) that pass the outbound URL policy (allow-all while `off`). The plugin check
+  sends a `HEAD` request as before, and reports the HTTP error instead of `Error in Web.GetHeaders`.
+
 ## [1.14.2] - 2026-11-02
 
 Supply chain ([I33](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i33-supply-chain-s)). No port, user, volume, variable or JSON changes.

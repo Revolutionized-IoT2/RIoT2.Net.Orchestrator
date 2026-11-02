@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RIoT2.Core.Security;
 using RIoT2.Core;
 using RIoT2.Core.Models;
 using RIoT2.Core.Utils;
@@ -13,6 +15,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
     [Route("api/Nodes")]
     [Tags("Nodes")]
     [ApiController]
+    [Authorize(Policy = SecurityPolicies.Viewer)]
     public class StateController : ControllerBase
     {
         private readonly IMessageStateService _messageStateService;
@@ -55,6 +58,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
         }
 
         [HttpPost("report/state")]
+        [Authorize(Policy = SecurityPolicies.Operator)]
         public IActionResult SetNodeReportStates([FromBody] IEnumerable<Report> reports)
         {
             try

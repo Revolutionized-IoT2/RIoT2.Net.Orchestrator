@@ -3,6 +3,7 @@ using Grpc.Core;
 using Microsoft.Extensions.Options;
 using RIoT2.Core;
 using RIoT2.Core.Models;
+using RIoT2.Core.Security;
 using RIoT2.Net.Orchestrator.Grpc;
 using RIoT2.Net.Orchestrator.Services.Outbox;
 
@@ -25,12 +26,13 @@ namespace RIoT2.Net.Orchestrator.Services.Automation
         private readonly ILogger<ElsaAutomationProvider> _logger;
         private readonly TimeProvider _time;
         private readonly TimeSpan _ttl;
-        private readonly WorkflowTriggerClient _client = new();
+        private readonly WorkflowTriggerClient _client;
         private readonly OutboxDispatcher _dispatcher;
 
         public ElsaAutomationProvider(OutboxStore store, IOnlineNodeService nodes, IOptions<OrchestratorOptions> options,
-            ILogger<ElsaAutomationProvider> logger, TimeProvider time)
+            ILogger<ElsaAutomationProvider> logger, TimeProvider time, IOutboundUrlPolicy? outboundUrlPolicy = null)
         {
+            _client = new WorkflowTriggerClient(options.Value.Security.ApiKey, outboundUrlPolicy);
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _nodes = nodes ?? throw new ArgumentNullException(nameof(nodes));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));

@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using RIoT2.Core.Models;
+using RIoT2.Core.Security;
 using RIoT2.Core.Utils;
 using RIoT2.Net.Orchestrator.Services;
 
@@ -11,6 +13,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
     /// </summary>
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Policy = SecurityPolicies.Viewer)]
     public class NodesController : ControllerBase
     {
         private readonly IOrchestratorConfigurationService _configuration;
@@ -92,6 +95,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
         [HttpGet("{id}/delete")]
         [HttpDelete("/api/v2/nodes/{id}")]
         [DeprecatedGetAlias("DELETE /api/v2/nodes/{id}")]
+        [Authorize(Policy = SecurityPolicies.Admin)]
         public IActionResult DeleteNode(string id)
         {
             _configuration.DeleteNodeConfiguration(id);
@@ -99,6 +103,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
         }
 
         [HttpPost("configuration")]
+        [Authorize(Policy = SecurityPolicies.Admin)]
         public IActionResult SaveConfiguration([FromBody] System.Text.Json.JsonElement json)
         {
             try

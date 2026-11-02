@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RIoT2.Core.Security;
 using RIoT2.Net.Orchestrator.Services.Outbox;
 
 namespace RIoT2.Net.Orchestrator.Controllers
@@ -6,6 +8,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
     /// <summary>The durable outbox for workflow triggers (design 7.1).</summary>
     [ApiController]
     [Route("api/v2/outbox")]
+    [Authorize(Policy = SecurityPolicies.Viewer)]
     public class OutboxController : ControllerBase
     {
         private readonly OutboxStore _store;

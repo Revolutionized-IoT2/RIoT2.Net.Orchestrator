@@ -17,7 +17,7 @@ How the orchestrator fits into the platform:
 
 | Path | Contents |
 | --- | --- |
-| `Program.cs` | Host setup, logging, CORS, JSON profiles, health checks and DI registration |
+| `Program.cs` | Host setup, logging, security seams, JSON profiles, health checks and DI registration |
 | `Controllers/` | REST API controllers for nodes, templates, state, dashboard, variables, commands, reports, Matter, the outbox and backups |
 | `Services/OrchestratorOptions.cs` | The `RIOT2_*` settings, read and validated at startup |
 | `Services/OrchestratorConfigurationService.cs` | Settings, stored configuration and template lookup |
@@ -48,19 +48,19 @@ invalid setting, for example `Invalid orchestrator configuration: {problem}; {pr
 | `RIOT2_ORCHESTRATOR_URL` | Yes | Base URL sent to nodes in `ConfigurationCommand.apiBaseUrl`; must be reachable by nodes and firmware |
 | `RIOT2_MQTT_IP` | Yes | MQTT broker host/IP |
 | `RIOT2_MQTT_PORT` | No | MQTT broker port; default 1883 |
-| `RIOT2_MQTT_USERNAME` | No | MQTT username; leave empty for an anonymous broker |
-| `RIOT2_MQTT_PASSWORD` | No | MQTT password |
+| `RIOT2_MQTT_USERNAME`, `_PASSWORD` | No | MQTT account; leave empty for an anonymous broker |
+| `RIOT2_MQTT_TLS`, `RIOT2_MQTT_CA_FILE` | No | TLS to the broker (port 8883), optionally with a private CA |
+| `RIOT2_SECURITY_MODE`, `RIOT2_API_KEY`, … | No | The optional security mode; only `off` yet ([env-vars](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/env-vars.md#shared-variables)) |
 | `RIOT2_OUTBOX_WORKFLOW_TTL` | No | Seconds a workflow trigger waits for delivery before it expires; 1–86400, default 300 |
 | `RIOT2_OUTBOX_COMMAND_TTL` | No | Seconds a command waits for its node and its answer before it expires; 1–86400, default 30 |
 | `RIOT2_LOG_FORMAT` | No | `text` (default) or `json` for the console and `Logs/RIoT2.log` |
 | `RIOT2_LOG_LEVEL` | No | `Trace` … `Critical`; default `Information` |
-| `RIOT2_BACKUP_SCHEDULE` | No | When to write a backup to `Backups/`: a Quartz cron expression with seconds, such as `0 0 3 * * ?` (03:00 daily, local time); unset is off |
-| `RIOT2_BACKUP_RETENTION` | No | How many backups `Backups/` keeps; 1–365, default 7 |
+| `RIOT2_BACKUP_SCHEDULE` | No | Backups to `Backups/`: a Quartz cron expression with seconds, e.g. `0 0 3 * * ?`; unset is off |
+| `RIOT2_BACKUP_RETENTION` | No | Backups kept; 1–365, default 7 |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | No | OTLP collector for metrics, such as `http://otel-collector:4317`; unset exports nothing |
 | `RIOT2_TRACING` | No | `true` also exports traces; needs the endpoint |
 
-Logs go to the console and to `Logs/RIoT2.log` (`/app/Logs`), rolled daily and at 50 MB, 14 files
-kept, through `AddRIoT2Logging()` from `RIoT2.Core.Hosting`. Lines logged while a command or a
+Logs go to the console and to `Logs/RIoT2.log` (`/app/Logs`) through `AddRIoT2Logging()`. Lines logged while a command or a
 workflow trigger is delivered end with `[CorrelationId=…]` or `[MessageId=…]`.
 
 Metrics (meter `RIoT2.Orchestrator`, plus `riot2.mqtt.*`, ASP.NET Core and the runtime) go out through
@@ -70,7 +70,6 @@ Metrics (meter `RIoT2.Orchestrator`, plus `riot2.mqtt.*`, ASP.NET Core and the r
 Hosting variables such as `ASPNETCORE_HTTP_PORTS`, `ASPNETCORE_URLS`, `ASPNETCORE_ENVIRONMENT` and
 `TZ` are described in the platform
 [environment contract](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/env-vars.md).
-`RIOT2_USE_EXTERNAL_WORKFLOW_ENGINE` is obsolete; Elsa 3 is the only workflow engine.
 
 Example local run from the workspace root (`C:\Src\RIoT2`):
 
@@ -83,17 +82,16 @@ $env:RIOT2_MQTT_PASSWORD = ""
 dotnet run --project .\RIoT2.Net.Orchestrator\RIoT2.Net.Orchestrator.csproj
 ```
 
-Do not copy values from `Properties/launchSettings.json`, `StoredObjects/`, `Logs/`,
-`MatterCredentials/` or `Backups/` into documentation or images; those locations are for local/runtime data.
+Never copy values from `launchSettings.json`, `StoredObjects/`, `Logs/`, `MatterCredentials/` or
+`Backups/` into documentation or images.
 
 ## Storage and Matter
 
-`StoredObjectService` keeps node configurations, variables and the dashboard (`IStoredObject`
-types) in memory and stores them with System.Text.Json; `FileObjectStore` writes them as
-`StoredObjects/<TypeName>/<id>.json` under the application content root. Files of types this
-version no longer reads (the old rule engine's `Rule/`) move to `StoredObjects/.archive/`. The outbox is `StoredObjects/outbox.db` (SQLite, with `-wal` and `-shm` files while it runs);
-include it in full-system backups, not in configuration backups. It validates type names and ids before using them as file names. The stored node
-configuration schema, variable behavior and persistence layout are documented in the platform
+`StoredObjectService` keeps node configurations, variables and the dashboard in memory and
+stores them with System.Text.Json; `FileObjectStore` writes `StoredObjects/<TypeName>/<id>.json`,
+validating type names and ids. Types no longer read (the old `Rule/`) move to
+`StoredObjects/.archive/`. The outbox is `StoredObjects/outbox.db` (SQLite); include it in
+full-system backups, not in configuration backups. The stored formats are documented in the platform
 [configuration contract](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/configuration.md).
 
 The Matter Control Bridge is disabled by default. Enable and configure it through the UI or
@@ -115,9 +113,10 @@ device credentials and Matter keys. Use and file format:
 
 ## API, MQTT and workflows
 
-The orchestrator REST API is anonymous by design for the isolated single-user deployment model
-([ADR 0002](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0002-isolated-network-security-model.md)).
-CORS allows any origin, method and header. The route table lives in the platform
+Nothing is enforced by default ([ADR 0002](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0002-isolated-network-security-model.md)):
+every action has a `Viewer`, `Operator` or `Admin` policy for the optional security mode
+([design 7.5](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/security-mode.md)), and while `RIOT2_SECURITY_MODE` is `off`, the only accepted value yet, every request
+passes. `GET /api/security/info` reports the mode. The route table lives in the platform
 [HTTP and gRPC API contract](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/http-api.md);
 this README intentionally does not duplicate it.
 

@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Quartz;
+using RIoT2.Core.Security;
 using RIoT2.Net.Orchestrator.Models;
 
 namespace RIoT2.Net.Orchestrator.Controllers
@@ -10,6 +12,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
     [Route("api/Nodes")]
     [Tags("Nodes")]
     [ApiController]
+    [Authorize(Policy = SecurityPolicies.Viewer)]
     public class CronController : ControllerBase
     {
         /// <summary>

@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RIoT2.Core.Security;
 using RIoT2.Net.Orchestrator.Services.Backup;
 
 namespace RIoT2.Net.Orchestrator.Controllers
@@ -9,6 +11,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
     /// </summary>
     [ApiController]
     [Route("api/v2")]
+    [Authorize(Policy = SecurityPolicies.Admin)]
     public class BackupController : ControllerBase
     {
         private const string ZipType = "application/zip";

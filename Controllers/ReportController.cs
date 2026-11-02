@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using RIoT2.Core.Models;
+using RIoT2.Core.Security;
 using RIoT2.Core.Utils;
 using RIoT2.Net.Orchestrator.Services;
 
@@ -7,6 +9,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Policy = SecurityPolicies.Viewer)]
     public class ReportController : ControllerBase
     {
         private readonly IOrchestratorConfigurationService _configuration;

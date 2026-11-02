@@ -1,6 +1,8 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RIoT2.Core.Models;
+using RIoT2.Core.Security;
 using RIoT2.Core.Utils;
 using RIoT2.Net.Orchestrator.Services.Commands;
 using RIoT2.Net.Orchestrator.Services;
@@ -13,6 +15,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
     /// </summary>
     [ApiController]
     [Route("api/v2/commands")]
+    [Authorize(Policy = SecurityPolicies.Viewer)]
     public class CommandsController : ControllerBase
     {
         private const int MaxTtlSeconds = 86400;
@@ -35,6 +38,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
         [ProducesResponseType<CommandDelivery>(StatusCodes.Status202Accepted)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [Authorize(Policy = SecurityPolicies.Operator)]
         public async Task<IActionResult> PostAsync([FromBody] JsonElement body, CancellationToken cancellationToken)
         {
             if (body.ValueKind != JsonValueKind.Object)

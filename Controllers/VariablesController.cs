@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RIoT2.Core.Models;
+using RIoT2.Core.Security;
 using RIoT2.Net.Orchestrator.Models;
 using RIoT2.Net.Orchestrator.Services.Persistence;
 
@@ -11,6 +13,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
     /// live in.
     /// </summary>
     [ApiController]
+    [Authorize(Policy = SecurityPolicies.Viewer)]
     public class VariablesController : ControllerBase
     {
         private readonly IStoredObjectStore _storedObjectService;
@@ -42,6 +45,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
         /// </summary>
         [HttpPost("api/Nodes/variable/save")]
         [Tags("Nodes")]
+        [Authorize(Policy = SecurityPolicies.Admin)]
         public IActionResult SaveVariable([FromBody] VariableDTO variable)
         {
             if (variable.Type == Core.ValueType.Number)
@@ -73,6 +77,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
         [HttpDelete("/api/v2/variables/{id}")]
         [DeprecatedGetAlias("DELETE /api/v2/variables/{id}")]
         [Tags("Nodes")]
+        [Authorize(Policy = SecurityPolicies.Admin)]
         public IActionResult DeleteVariable(string id)
         {
             _storedObjectService.Delete<Variable>(id);

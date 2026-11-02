@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using RIoT2.Core;
 using RIoT2.Core.Models;
+using RIoT2.Core.Security;
 using RIoT2.Core.Utils;
 using RIoT2.Net.Orchestrator.Models;
 
@@ -8,16 +9,32 @@ namespace RIoT2.Net.Orchestrator.Services
 {
     public class OnlineNodeService : IOnlineNodeService
     {
+        /// <summary>
+        /// The <c>IHttpClientFactory</c> client for calls to nodes: <c>X-RIoT2-Key</c> when the
+        /// orchestrator has <c>RIOT2_API_KEY</c>, and the outbound URL policy (design 7.5).
+        /// </summary>
+        public const string HttpClientName = "riot2-nodes";
+
+        // Without a factory (tests): one client with the allow-all policy and no key.
+        private static readonly HttpClient DefaultClient = new(new OutboundUrlPolicyHandler(
+            AllowAllOutboundUrlPolicy.Instance, OutboundPurposes.Node, new SocketsHttpHandler()))
+        {
+            Timeout = TimeSpan.FromSeconds(60)
+        };
+
         private readonly ConcurrentDictionary<string, OnlineNode> _onlineNodes;
         // Kept while a node is offline: the status is retained, and still describes the node.
         private readonly ConcurrentDictionary<string, NodeStatusMessage> _statuses = new();
         private readonly IOrchestratorConfigurationService _configuration;
+        private readonly IHttpClientFactory? _httpClientFactory;
         private ILogger<OnlineNodeService> _logger;
 
-        public OnlineNodeService(IOrchestratorConfigurationService configuration, ILogger<OnlineNodeService> logger)
+        public OnlineNodeService(IOrchestratorConfigurationService configuration, ILogger<OnlineNodeService> logger,
+            IHttpClientFactory? httpClientFactory = null)
         {
             _configuration = configuration;
             _logger = logger;
+            _httpClientFactory = httpClientFactory;
             _onlineNodes = new ConcurrentDictionary<string, OnlineNode>();
         }
 
@@ -99,7 +116,7 @@ namespace RIoT2.Net.Orchestrator.Services
 
             try 
             {
-                var response = await Web.GetAsync(onlineNode.OnlineNodeSettings.NodeBaseUrl + Constants.ApiConfigurationTemplateUrl);
+                using var response = await NodeClient().GetAsync(onlineNode.OnlineNodeSettings.NodeBaseUrl + Constants.ApiConfigurationTemplateUrl);
                 if (response.IsSuccessStatusCode)
                 {
                     var json = await response.Content.ReadAsStringAsync();
@@ -121,7 +138,7 @@ namespace RIoT2.Net.Orchestrator.Services
 
             try
             {
-                var response = await Web.GetAsync(onlineNode.OnlineNodeSettings.NodeBaseUrl + Constants.ApiDeviceStateUrl);
+                using var response = await NodeClient().GetAsync(onlineNode.OnlineNodeSettings.NodeBaseUrl + Constants.ApiDeviceStateUrl);
                 if (response.IsSuccessStatusCode)
                 {
                     var json = await response.Content.ReadAsStringAsync();
@@ -135,6 +152,8 @@ namespace RIoT2.Net.Orchestrator.Services
             }
             return null;
         }
+
+        private HttpClient NodeClient() => _httpClientFactory?.CreateClient(HttpClientName) ?? DefaultClient;
 
         public async Task<Dictionary<string, List<DeviceConfiguration>?>> LoadDeviceConfigurationTemplatesAsync()
         {

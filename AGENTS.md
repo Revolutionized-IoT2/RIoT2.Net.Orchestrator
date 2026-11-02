@@ -56,8 +56,8 @@ must keep them passing.
 
 | Path | Contents |
 |---|---|
-| `Program.cs` | ASP.NET Core host, logging (`AddRIoT2Logging()`), CORS, JSON profiles, DI, health checks and hosted services |
-| `Controllers/` | Anonymous REST controllers, one per resource: nodes, templates, state, variables, plugin and cron checks, dashboard, reports, commands (`api/v2/commands`), Matter, backup and the outbox. `DeprecatedGetAliasAttribute` marks the old state-changing `GET` routes |
+| `Program.cs` | ASP.NET Core host, logging (`AddRIoT2Logging()`), `AddRIoT2Security()`, JSON profiles, DI, health checks and hosted services |
+| `Controllers/` | REST controllers (`Viewer` by default, writes `Operator`/`Admin`), one per resource: nodes, templates, state, variables, plugin and cron checks, dashboard, reports, commands (`api/v2/commands`), Matter, backup and the outbox. `DeprecatedGetAliasAttribute` marks the old state-changing `GET` routes |
 | `CustomJsonSettings/` | `OrchestratorJsonOptions` (controller JSON settings) and the deprecated `json-naming-policy: pascal\|lower` profiles (`NamingPolicyHeaderDeprecation`; removed in I45) |
 | `openapi/riot2-orchestrator.json` | Generated OpenAPI document (the REST route contract), committed |
 | `Services/OrchestratorOptions.cs` | Every `RIOT2_*` setting the orchestrator reads, validated at startup with Core's `SettingsReader` |
@@ -104,20 +104,21 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
 ## Rules
 
 - Follow [ADR 0002](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0002-isolated-network-security-model.md):
-  APIs are anonymous by design, CORS is permissive, and mandatory auth must not be added.
+  nothing is enforced while `RIOT2_SECURITY_MODE` is `off`; mandatory auth must not be added.
 - New endpoints must not change state on `GET`. The old state-changing `GET` routes are deprecated
   aliases of `/api/v2` routes on the same action (`[DeprecatedGetAlias]`); don't add new ones, and
   remove them with backlog item 7.
-- Do not add ad-hoc per-endpoint authentication. Optional security belongs behind the single
-  security-mode design.
-- Validate every input even though the current deployment model is an isolated single-user
-  network.
+- Every action gets `[Authorize(Policy = SecurityPolicies.…)]` (design 7.5): `Viewer` reads,
+  `Operator` commands, `Admin` writes; the end-to-end suite fails otherwise. No ad-hoc auth.
+- Outbound calls go through an `IHttpClientFactory` client with `OutboundUrlPolicyHandler`;
+  only clients to RIoT2 services get `ApiKeyHandler`.
+- Validate every input, even on an isolated network.
 - Keep REST routes, MQTT topics, JSON payloads and the gRPC proto additive and compatible with
   `RIoT2.Core`, `RIoT2.UI`, `RIoT2.Elsa`, firmware and connectors.
 - Use `RIoT2.Core.Constants.Get` / `GetTopicId` for topics and Core `Json.Serialize` /
   `Json.SerializeIgnoreNulls` for wire payloads that use Core models.
 - Keep the Core and Matter packages as package references: the Dockerfile restores from GitHub
-  Packages. Pins: `RIoT2.Core.Contracts`, `.Http`, `.Mqtt` and `.Hosting` `1.17.0` (never the facade
+  Packages. Pins: `RIoT2.Core.Contracts`, `.Http`, `.Mqtt` and `.Hosting` `1.18.0` (never the facade
   or `.Node`; Quartz is a direct reference), `RIoT2.Matter` and
   `RIoT2.Matter.ControlBridge` `1.0.0`, and the transitive `System.Security.Cryptography.Pkcs`
   `10.0.14` (drop it once RIoT2.Matter brings a patched one). Use `C:\Src\RIoT2\.localfeed` only to
@@ -126,12 +127,9 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   from raw ids.
 - Matter generated credentials and the fabric store must stay under a content-root-relative
   `CredentialsDirectory` (default `MatterCredentials`); reject absolute or escaping paths.
-- Container images must not contain credentials, IDs, IPs, `StoredObjects`, logs or local
-  development settings. Use placeholders in docs and environment variables at runtime.
-- Keep the Docker runtime on unprivileged port `8080` and the non-root .NET app user unless an
-  explicit deployment design changes it.
-- Elsa 3 is the only automation engine. Do not reintroduce the retired rule engine or the obsolete
-  `RIOT2_USE_EXTERNAL_WORKFLOW_ENGINE` switch.
+- Images must not contain credentials, IDs, IPs, `StoredObjects`, logs or local settings.
+- Keep the image on port `8080` and the non-root .NET app user.
+- Elsa 3 is the only automation engine; don't reintroduce the rule engine.
 - Reach automation only through `IAutomationProvider` (ADR 0008); nothing outside
   `Services/Automation/` calls `WorkflowTriggerClient`. A trigger must be in the outbox before
   `ReportReceivedAsync` returns, and its outbox id is its `message_id`: never send a redelivery with

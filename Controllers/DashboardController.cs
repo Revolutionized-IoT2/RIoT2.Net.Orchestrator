@@ -1,6 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using RIoT2.Core.Models;
 using System.Data;
+using RIoT2.Core.Security;
 using RIoT2.Core.Utils;
 using RIoT2.Net.Orchestrator.Services;
 
@@ -8,6 +10,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Policy = SecurityPolicies.Viewer)]
     public class DashboardController : ControllerBase
     {
         IOrchestratorConfigurationService _configuration;
@@ -42,6 +45,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
         }
 
         [HttpPost("configuration")]
+        [Authorize(Policy = SecurityPolicies.Admin)]
         public IActionResult SaveDashboard([FromBody] System.Text.Json.JsonElement json)
         {
             var id = _configuration.SaveDashboardConfiguration(json.ToString());
@@ -68,6 +72,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
         [HttpGet("reports/history/reset")]
         [HttpDelete("/api/v2/reports/history")]
         [DeprecatedGetAlias("DELETE /api/v2/reports/history")]
+        [Authorize(Policy = SecurityPolicies.Admin)]
         public IActionResult ResetReportHistory()
         {
             _messageStateService.Reset();
