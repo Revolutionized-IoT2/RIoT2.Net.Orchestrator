@@ -5,6 +5,17 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.14.2] - 2026-11-02
+
+Supply chain ([I33](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i33-supply-chain-s)). No port, user, volume, variable or JSON changes.
+
+- Build: the Dockerfile's base images are pinned by digest (`<image>:<tag>@sha256:...`), rebuilt on
+  the current .NET 10 / base image patches. Renovate updates the digests.
+- The image carries an SPDX SBOM and a provenance attestation; the tag now names an image index.
+  `docker pull` and compose are unaffected.
+- Build: `renovate.json` extends the shared Renovate preset ([I33](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i33-supply-chain-s)). Renovate opens grouped
+  update pull requests once the app is installed (MA7).
+
 ## [1.14.1] - 2026-11-02
 
 With RIoT2.Core 1.17.0. No port, user, volume, variable, JSON or API changes.

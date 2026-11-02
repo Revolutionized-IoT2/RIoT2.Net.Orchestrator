@@ -73,7 +73,7 @@ must keep them passing.
 | `Services/Matter/` | `MatterBridgeService` (lifecycle) with `MatterCredentials`, `MatterProvisioning`, `MatterHostNetwork` and `MatterBridgedEndpoints` (endpoints, reports, reachability) |
 | `Services/WorkflowTriggerClient.cs` | Reused gRPC client/channel with a five-second workflow trigger deadline; used only by `ElsaAutomationProvider` |
 | `Protos/riot_trigger.proto` | gRPC trigger contract, kept in lockstep with Elsa's `riot.proto` |
-| `Dockerfile` | .NET 10 multi-stage image; runtime is Alpine, non-root, HTTP port 8080 |
+| `Dockerfile` | .NET 10 multi-stage, Alpine, non-root, port 8080; bases pinned by digest |
 | `.github/workflows/ci.yml`, `release.yml` | CI on every push; GHCR image release on a tag |
 
 ## Contracts implemented here
