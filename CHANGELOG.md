@@ -5,6 +5,15 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-11-02
+
+Typed device options ([I30](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-2.md#i30-typed-device-options-m)), with RIoT2.Core 1.16.0. No port, user, volume, variable or
+stored-format changes.
+
+- Added: `GET /api/nodes/{id}/device/templates` passes on the templates' `parameterDefinitions`.
+- Changed: `POST /api/nodes/configuration` drops `parameterDefinitions` from every device before it
+  stores and hashes the configuration, so stored files and hashes stay as they were.
+
 ## [1.13.1] - 2026-11-01
 
 - Fixed: the image starts again (1.13.0 failed with `FileNotFoundException` for

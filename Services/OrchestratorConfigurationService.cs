@@ -208,6 +208,10 @@ namespace RIoT2.Net.Orchestrator.Services
                 if (String.IsNullOrEmpty(dev.Id))
                     dev.Id = Guid.NewGuid().ToString();
 
+                // Parameter definitions describe the plugin, not the configuration: the UI reads them from the
+                // node's templates. Not storing them keeps stored files and hashes unchanged (Core 1.16.0).
+                dev.ParameterDefinitions = null;
+
                 if (dev.ReportTemplates != null)
                 {
                     foreach (var r in dev.ReportTemplates)
