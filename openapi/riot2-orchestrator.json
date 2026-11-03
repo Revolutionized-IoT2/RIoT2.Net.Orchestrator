@@ -44,17 +44,17 @@
           "409": {
             "description": "Conflict",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -84,17 +84,17 @@
           "200": {
             "description": "OK",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestoreResult"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RestoreResult"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RestoreResult"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/RestoreResult"
                 }
@@ -104,17 +104,17 @@
           "400": {
             "description": "Bad Request",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -124,17 +124,17 @@
           "409": {
             "description": "Conflict",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -144,17 +144,17 @@
           "413": {
             "description": "Payload Too Large",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -173,17 +173,17 @@
           "200": {
             "description": "OK",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupSummary"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BackupSummary"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackupSummary"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/BackupSummary"
                 }
@@ -222,17 +222,17 @@
           "404": {
             "description": "Not Found",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -261,17 +261,17 @@
           "200": {
             "description": "OK",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestoreResult"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RestoreResult"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RestoreResult"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/RestoreResult"
                 }
@@ -281,17 +281,17 @@
           "400": {
             "description": "Bad Request",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -301,17 +301,17 @@
           "404": {
             "description": "Not Found",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -321,17 +321,17 @@
           "409": {
             "description": "Conflict",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -404,17 +404,17 @@
           "200": {
             "description": "OK",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandDelivery"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CommandDelivery"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CommandDelivery"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/CommandDelivery"
                 }
@@ -424,17 +424,17 @@
           "202": {
             "description": "Accepted",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandDelivery"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CommandDelivery"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CommandDelivery"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/CommandDelivery"
                 }
@@ -444,17 +444,17 @@
           "400": {
             "description": "Bad Request",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -464,17 +464,17 @@
           "404": {
             "description": "Not Found",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -503,17 +503,17 @@
           "200": {
             "description": "OK",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandDelivery"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CommandDelivery"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CommandDelivery"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/CommandDelivery"
                 }
@@ -523,17 +523,17 @@
           "404": {
             "description": "Not Found",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -552,6 +552,14 @@
           "200": {
             "description": "OK",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ConnectorInfo"
+                  }
+                }
+              },
               "application/json": {
                 "schema": {
                   "type": "array",
@@ -561,14 +569,6 @@
                 }
               },
               "text/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ConnectorInfo"
-                  }
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "type": "array",
                   "items": {
@@ -1004,6 +1004,14 @@
           "200": {
             "description": "OK",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NodeSync"
+                  }
+                }
+              },
               "application/json": {
                 "schema": {
                   "type": "array",
@@ -1013,14 +1021,6 @@
                 }
               },
               "text/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/NodeSync"
-                  }
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "type": "array",
                   "items": {
@@ -1055,17 +1055,17 @@
           "404": {
             "description": "Not Found",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -1075,17 +1075,17 @@
           "409": {
             "description": "Conflict",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -1104,17 +1104,17 @@
           "200": {
             "description": "OK",
             "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutboxSummary"
+                }
+              },
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OutboxSummary"
                 }
               },
               "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OutboxSummary"
-                }
-              },
-              "text/plain": {
                 "schema": {
                   "$ref": "#/components/schemas/OutboxSummary"
                 }

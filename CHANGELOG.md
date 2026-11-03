@@ -5,6 +5,17 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-11-03
+
+Core 2.0 ([I45](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-3-4.md#i45-core-20-remove-compatibility-layers-m)).
+
+- Removed: the `json-naming-policy` request header (`pascal`, `lower`), deprecated since 1.11.0.
+  Every response is camelCase; a request with the header gets camelCase too, without the
+  `Deprecation` response header. External scripts that sent it must read camelCase.
+- Changed: built on `RIoT2.Core.*` 2.0.0 (no Newtonsoft.Json, source-generated contract metadata).
+  The wire format and the stored files are unchanged. `openapi/riot2-orchestrator.json` lists the
+  media types in the framework's order, now that the profile formatters are gone.
+
 ## [1.18.0] - 2026-11-02
 
 Matter completion ([I43](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-3-4.md#i43-matter-completion-m), ADR 0010), with RIoT2.Matter 1.1.0. No port, user, volume, variable or

@@ -30,7 +30,7 @@ How the orchestrator fits into the platform:
 | `Services/OrchestratorMetrics.cs` | The `RIoT2.Orchestrator` meter: reports, workflow deliveries, outbox, commands, nodes (design 7.4) |
 | `Services/Templates/` | `ITemplateCatalog`, which shapes every REST template listing |
 | `Services/Matter/` | Matter Control Bridge: lifecycle, credentials, provisioning and bridged endpoints |
-| `CustomJsonSettings/` | Controller JSON settings (`OrchestratorJsonOptions`) and the deprecated `json-naming-policy` formatter profiles |
+| `CustomJsonSettings/` | Controller JSON settings (`OrchestratorJsonOptions`, camelCase) |
 | `openapi/riot2-orchestrator.json` | OpenAPI document of the REST routes, written by every build and committed |
 | `Protos/riot_trigger.proto` | gRPC workflow trigger client contract |
 | `Dockerfile` | Multi-stage .NET 10 container image |

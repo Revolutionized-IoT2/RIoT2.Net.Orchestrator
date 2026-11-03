@@ -44,11 +44,7 @@ builder.Services.AddSingleton(Options.Create(orchestratorOptions));
 // Add services to the container.
 // Nullable annotations must not change request validation (plan M8 step 9).
 builder.Services.AddControllers(o => o.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true)
-    .AddJsonOptions(o => OrchestratorJsonOptions.Configure(o.JsonSerializerOptions, JsonNamingPolicy.CamelCase))
-    // Deprecated (NamingPolicyHeaderDeprecation): the json-naming-policy header's "pascal" (the C# names)
-    // and "lower" variants.
-    .AddJsonOptions("pascal", o => OrchestratorJsonOptions.Configure(o.JsonSerializerOptions, null))
-    .AddJsonOptions("lower", o => OrchestratorJsonOptions.Configure(o.JsonSerializerOptions, new LowerCaseNamingPolicy()));
+    .AddJsonOptions(o => OrchestratorJsonOptions.Configure(o.JsonSerializerOptions, JsonNamingPolicy.CamelCase));
 
 // The OpenAPI document is generated at build time into openapi/ (the REST route contract, plan M7
 // step 2); it isn't served at runtime.
@@ -147,8 +143,6 @@ if (!generatingOpenApiDocument)
 //app.UseHttpsRedirection();
 
 app.UseRIoT2Security();
-
-app.UseMiddleware<NamingPolicyHeaderDeprecation>();
 
 app.MapHealthChecks("/health").AllowAnonymous();
 app.MapRIoT2SecurityInfo();

@@ -58,7 +58,7 @@ must keep them passing.
 |---|---|
 | `Program.cs` | ASP.NET Core host, logging (`AddRIoT2Logging()`), `AddRIoT2Security()`, JSON profiles, DI, health checks and hosted services |
 | `Controllers/` | REST controllers (`Viewer` by default, writes `Operator`/`Admin`), one per resource: nodes, connectors (`api/v2/connectors`), templates, state, variables, plugin and cron checks, dashboard, reports, commands (`api/v2/commands`), Matter, backup and the outbox. `DeprecatedGetAliasAttribute` marks the old state-changing `GET` routes |
-| `CustomJsonSettings/` | `OrchestratorJsonOptions` (controller JSON settings) and the deprecated `json-naming-policy: pascal\|lower` profiles (`NamingPolicyHeaderDeprecation`; removed in I45) |
+| `CustomJsonSettings/` | `OrchestratorJsonOptions` (controller JSON settings; camelCase only since 1.19.0) |
 | `openapi/riot2-orchestrator.json` | Generated OpenAPI document (the REST route contract), committed |
 | `Services/OrchestratorOptions.cs` | Every `RIOT2_*` setting the orchestrator reads, validated at startup with Core's `SettingsReader` |
 | `Services/OrchestratorConfigurationService.cs` | Settings from `IOptions<OrchestratorOptions>`, stored node/dashboard configuration and template lookup |
@@ -118,8 +118,8 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
 - Use `RIoT2.Core.Constants.Get` / `GetTopicId` for topics and Core `Json.Serialize` /
   `Json.SerializeIgnoreNulls` for wire payloads that use Core models.
 - Keep the Core and Matter packages as package references: the Dockerfile restores from GitHub
-  Packages. Pins: `RIoT2.Core.Contracts`, `.Http`, `.Mqtt` and `.Hosting` `1.22.0` (never the facade
-  or `.Node`; Quartz is a direct reference), `RIoT2.Matter` and `.ControlBridge` `1.1.0`, and the
+  Packages. Pins: `RIoT2.Core.Contracts`, `.Http`, `.Mqtt` and `.Hosting` `2.0.0` (never
+  `.Node`; Quartz is a direct reference), `RIoT2.Matter` and `.ControlBridge` `1.1.0`, and the
   transitive `System.Security.Cryptography.Pkcs` `10.0.14`. `.localfeed` is only for unreleased versions.
 - `FileObjectStore` must validate type names and ids as file names. Never build persistence paths
   from raw ids.
@@ -141,7 +141,7 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
 - The outbox SQL is plain `Microsoft.Data.Sqlite`; no EF Core. A schema change raises
   `PRAGMA user_version` in `OutboxStore` and must open an existing `outbox.db`.
 - Stored types implement `IStoredObject` and go through `IStoredObjectStore`, written only with
-  `StoredObjectJson`. No `dynamic` or Newtonsoft; I45 removes the `json-naming-policy` profiles.
+  `StoredObjectJson`. No `dynamic` or Newtonsoft. The `json-naming-policy` header is gone (1.19.0, I45): JSON is camelCase only.
 - A route change must commit the regenerated `openapi/riot2-orchestrator.json`; CI
   (`verify-generated`) fails otherwise, and the RIoT2.UI route test reads it. A change to a response
   or stored format must regenerate the golden files in `RIoT2.Core/contracts/golden` (RIoT2.Tests
