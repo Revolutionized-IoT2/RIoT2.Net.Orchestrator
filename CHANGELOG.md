@@ -5,6 +5,25 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+The MCP server and remote AI access ([I57](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-3-4.md#i57-mcp-server-and-remote-ai-access-m),
+[ADR 0018](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0018-mcp-server-and-remote-ai-access.md)). Planned as 1.22.0.
+
+- Added: an MCP server (`ModelContextProtocol.AspNetCore`, Streamable HTTP, stateless) at `/mcp` with
+  `RIOT2_MCP_ENABLED=true`. Tools in groups: values (`list_values`, `read_value`, `read_values`), health
+  (`list_nodes`, `get_system_health`), `send_command` (only the allowed commands, through the command outbox),
+  `set_variable`, workflows and their runs, `cancel_workflow_run`, and configuration (node configurations with every
+  device parameter redacted, variables, workflows). The policy (groups, allowed commands, writes per minute, the
+  listeners' switches) is the stored `McpConfiguration`; a new installation only reads.
+- Added: a remote MCP listener with `RIOT2_MCP_AUTH=cloudflare-access` or `oidc`, on its own port
+  (`RIOT2_MCP_REMOTE_PORT`, default 8090), serving only `/mcp` and its protected resource metadata. It validates a
+  token on every request in every security mode, gives at most `RIOT2_MCP_REMOTE_MAX_ROLE` (default operator), can
+  admit only `RIOT2_MCP_ALLOWED_SUBJECTS`, and allows 120 requests a minute per user.
+- Added: `/api/v2/mcp` (`McpController`): the status, the tool policy (`PUT` is Admin) and the latest tool calls.
+- Added: the metrics `riot2.mcp.tool_calls` and `riot2.mcp.auth_failures`; every tool call is logged as `RIoT2.Mcp`.
+- Changed: the Run LLM step's tools share their values and commands with the MCP tools (`Services/Tools/RiotTools`);
+  their behaviour is unchanged.
+- Changed: configuration backups restore `McpConfiguration`.
+
 ## [1.21.0] - 2026-11-03
 
 Workflows in the orchestrator, the designer's API and Run LLM ([I55](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-3-4.md#i55-integrated-workflows-and-run-llm-m),

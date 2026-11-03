@@ -23,6 +23,8 @@ namespace RIoT2.Net.Orchestrator.Services
         public const string CommandLatencyName = "riot2.command.latency";
         public const string NodesOnlineName = "riot2.nodes.online";
         public const string NodesOutOfSyncName = "riot2.nodes.out_of_sync";
+        public const string McpToolCallsName = "riot2.mcp.tool_calls";
+        public const string McpAuthFailuresName = "riot2.mcp.auth_failures";
 
         private static readonly Meter Meter = new(MeterNames.Orchestrator);
         private static volatile Sources? _sources;
@@ -46,6 +48,14 @@ namespace RIoT2.Net.Orchestrator.Services
         /// <summary>From queueing a command to its final status, by <c>outcome</c>.</summary>
         public static readonly Histogram<double> CommandLatency = Meter.CreateHistogram<double>(CommandLatencyName, "s",
             "Time from queueing a command to its final status, by outcome.");
+
+        /// <summary>MCP tool calls (ADR 0018), by <c>tool</c>, <c>listener</c> (<c>local</c>, <c>remote</c>) and <c>outcome</c>.</summary>
+        public static readonly Counter<long> McpToolCalls = Meter.CreateCounter<long>(McpToolCallsName, "{call}",
+            "MCP tool calls, by tool, listener (local or remote) and outcome: ok, error, denied, limited or failed.");
+
+        /// <summary>Requests to the remote MCP listener that were refused, by <c>reason</c>: <c>token</c> or <c>subject</c>.</summary>
+        public static readonly Counter<long> McpAuthFailures = Meter.CreateCounter<long>(McpAuthFailuresName, "{request}",
+            "Requests to the remote MCP listener refused, by reason: token (missing or invalid) or subject (not allowed).");
 
         static OrchestratorMetrics()
         {

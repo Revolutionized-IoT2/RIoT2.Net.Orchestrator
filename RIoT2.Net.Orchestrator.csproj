@@ -24,6 +24,9 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="QRCoder" />
+    <!-- The MCP server and its remote listener's token validation (ADR 0018). -->
+    <PackageReference Include="ModelContextProtocol.AspNetCore" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <!-- The embedded workflow engine (ADR 0016): Elsa with the RIoT activities, run in process when RIOT2_WORKFLOW_MODE=embedded. -->
     <PackageReference Include="RIoT2.Elsa.Workflows" />
     <!-- The alias keeps their Json namespace from hiding RIoT2.Core.Utils.Json. -->

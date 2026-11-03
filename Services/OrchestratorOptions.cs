@@ -74,6 +74,9 @@ namespace RIoT2.Net.Orchestrator.Services
         /// </summary>
         public int BackupRetention { get; set; } = 7;
 
+        /// <summary>The MCP server's settings (<see cref="Mcp.McpOptions"/>, ADR 0018); off by default.</summary>
+        public Services.Mcp.McpOptions Mcp { get; set; } = new();
+
         /// <summary>
         /// Reads and validates the settings, and throws <see cref="ConfigurationValidationException"/>
         /// listing every problem (logged as critical) when any is missing or invalid.
@@ -94,7 +97,8 @@ namespace RIoT2.Net.Orchestrator.Services
                 BackupSchedule = settings.Optional(BackupScheduleVariable)?.Trim(),
                 BackupRetention = settings.Integer(BackupRetentionVariable, 7, 1, 365),
                 WorkflowMode = (settings.Optional(WorkflowModeVariable)?.Trim().ToLowerInvariant()) is { Length: > 0 } mode ? mode : WorkflowModes.Embedded,
-                Location = RIoT2.Elsa.Workflows.Automation.GeoLocation.Read(name => settings.Optional(name), settings.AddError)
+                Location = RIoT2.Elsa.Workflows.Automation.GeoLocation.Read(name => settings.Optional(name), settings.AddError),
+                Mcp = Services.Mcp.McpOptions.Read(settings, configuration)
             };
             if (options.WorkflowMode is not (WorkflowModes.Embedded or WorkflowModes.Remote))
             {

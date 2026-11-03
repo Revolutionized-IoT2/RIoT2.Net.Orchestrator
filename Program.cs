@@ -15,6 +15,7 @@ using RIoT2.Net.Orchestrator.Services.Backup;
 using RIoT2.Net.Orchestrator.Services.Commands;
 using RIoT2.Net.Orchestrator.Services.Outbox;
 using RIoT2.Net.Orchestrator.Services.Matter;
+using RIoT2.Net.Orchestrator.Services.Mcp;
 using RIoT2.Net.Orchestrator.Services.Persistence;
 using RIoT2.Net.Orchestrator.Services.Templates;
 using RIoT2.Core.Diagnostics;
@@ -114,6 +115,9 @@ builder.Services.AddSingleton<LlmToolbox>();
 builder.Services.AddSingleton(s => LlmUsageStore.Open(s.GetRequiredService<IWebHostEnvironment>(), s.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton<LlmService>();
 builder.Services.AddSingleton<ILlmRunner>(s => s.GetRequiredService<LlmService>());
+// The MCP server (ADR 0018): /mcp on this port when RIOT2_MCP_ENABLED, and the remote listener on its own port with
+// RIOT2_MCP_AUTH. The AI access page's services are always registered.
+builder.AddRIoT2Mcp(orchestratorOptions.Mcp);
 // Commands go through the same outbox, one dispatcher per node, and nodes answer with results.
 builder.Services.AddSingleton<CommandOutbox>();
 builder.Services.AddSingleton<ICommandOutbox>(s => s.GetRequiredService<CommandOutbox>());
@@ -180,6 +184,10 @@ if (!generatingOpenApiDocument)
 
     var orchestratorConfiguration = app.Services.GetRequiredService<IOrchestratorConfigurationService>().OrchestratorConfiguration;
     orchestratorLogger.LogInformation($"Services initialized. {orchestratorConfiguration.Manifest?.Name} - {orchestratorConfiguration.Manifest?.Version}");
+    var mcp = orchestratorOptions.Mcp;
+    if (mcp.Enabled)
+        orchestratorLogger.LogInformation("MCP server at {Route}; remote listener {Remote}", McpServerSetup.Route,
+            mcp.RemoteEnabled ? $"on port {mcp.RemotePort} ({mcp.Auth}, {mcp.PublicUrl}, at most {mcp.RemoteMaxRole})" : "off");
 
     // The gauges read the outbox and the node lists until the host stops.
     OrchestratorMetrics.Observe(app.Services.GetRequiredService<OutboxStore>(), app.Services.GetRequiredService<IOnlineNodeService>(),
@@ -198,11 +206,17 @@ if (!generatingOpenApiDocument)
 
 //app.UseHttpsRedirection();
 
+// The remote MCP listener's port serves only /mcp and its metadata; this gate runs before routing.
+app.UseRIoT2McpGate(orchestratorOptions.Mcp);
+
 app.UseRIoT2Security();
+if (orchestratorOptions.Mcp.RemoteEnabled)
+    app.UseRateLimiter();
 
 app.MapHealthChecks("/health").AllowAnonymous();
 app.MapRIoT2SecurityInfo();
 app.MapControllers();
+app.MapRIoT2Mcp(orchestratorOptions.Mcp);
 // The embedded engine's HTTP endpoint activities, below /workflows.
 if (embeddedWorkflows && !generatingOpenApiDocument)
     app.UseWorkflows();

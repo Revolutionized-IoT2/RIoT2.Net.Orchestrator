@@ -13,7 +13,8 @@ dashboard, variable and Matter bridge configuration, tracks online nodes, routes
 commands, and runs the Elsa 3 workflows through a durable SQLite outbox: in process
 (`RIOT2_WORKFLOW_MODE=embedded`, the default) or on the Elsa container over gRPC (`remote`). It serves
 the UI's workflow designer (`/api/workflows`) and the Run LLM connections (`/api/llm`)
-([ADR 0016](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0016-integrated-workflows-and-llm.md)). It publishes the Docker image
+([ADR 0016](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0016-integrated-workflows-and-llm.md)), and an optional MCP server for AI assistants (`/mcp`,
+with an authenticated remote listener; [ADR 0018](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0018-mcp-server-and-remote-ai-access.md)). It publishes the Docker image
 `ghcr.io/revolutionized-iot2/riot2-orchestrator`.
 
 ## Commands
@@ -70,6 +71,7 @@ must keep them passing.
 | `Services/Automation/` | `IAutomationProvider` (ADR 0008): `OutboxAutomationProvider` stores triggers in the outbox and runs their dispatcher as a hosted service; `EmbeddedAutomationProvider` hands them to `RIoTTriggers` in process, `ElsaAutomationProvider` over gRPC |
 | `Services/Workflows/` | `IWorkflowEngine` (`/api/workflows`): `EmbeddedWorkflowEngine` (the management service in a scope) or `RemoteWorkflowEngine` (the host's `/riot/workflows`); `OrchestratorRIoTDataService` gives embedded activities values and commands |
 | `Services/Llm/` | `LlmConnectionService` (stored objects, API keys protected with Data Protection), `LanguageModels` (OpenAI chat and Anthropic HTTP adapters), `LlmToolbox`, `LlmService` (`ILlmRunner`), `LlmUsageStore` (`StoredObjects/llm-usage.db`) |
+| `Services/Tools/`, `Services/Mcp/` | `RiotTools` (values and commands for `LlmToolbox` and MCP); the MCP server ([mcp.md](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/mcp.md)): `McpOptions`, `McpServerSetup` (remote port gate, JWT profiles), `McpGuard` (filters and audit), `McpConfiguration`, `Tools/` |
 | `Services/Outbox/` | `OutboxStore` (`StoredObjects/outbox.db`, plain SQL over `Microsoft.Data.Sqlite`), `OutboxDispatcher` (FIFO per target, backoff, TTL, cleanup), `OutboxHealthCheck` |
 | `Services/Persistence/` | `IStoredObjectStore` (typed; `StoredObjectService`), `StoredObjectJson` (storage format), the `StoredObjects/<Type>/<Id>.json` files, `IObjectStoreArchive` (export, replace, `.archive/`), `LegacyStoredObjects` |
 | `Services/OrchestratorMetrics.cs` | Meter `RIoT2.Orchestrator` (design 7.4); names in the hub's `contracts/metrics.md`, pinned by RIoT2.Tests |
@@ -89,6 +91,8 @@ topic or environment-variable tables here.
 - [http-api.md](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/http-api.md):
   `Controllers/`, `Program.cs`, `CustomJsonSettings/Formatters.cs`, `/health`, and
   `Protos/riot_trigger.proto`.
+- [mcp.md](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/mcp.md):
+  `Controllers/McpController.cs` and `Services/Mcp/` (the tools, their groups and the remote listener).
 - [mqtt-topics.md](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/mqtt-topics.md):
   `Services/OrchestratorMqttService.cs`, `Services/MqttBackgroundService.cs` and
   `Services/MqttHealthCheck.cs`.
@@ -163,6 +167,11 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   files under the `StoredObjectService` lock inside `IMatterBridgeService.RunStoppedAsync`.
 - Logging is `AddRIoT2Logging()` (RIoT2.Core.Hosting), set by `RIOT2_LOG_*`; add no sinks,
   providers or `Logging` sections. Scope work for one message with `BeginIdScope(LogScope…)`.
+- MCP (ADR 0018): each tool has `[McpServerTool(Name = …)]`, a `[McpToolGroup]` and honest hints, and
+  its class is in `McpToolCatalog.ToolTypes`; `McpGuard` enforces groups, roles, the allowlist and the
+  write rate. No tool deletes or reaches security, backups, LLM connections, Matter or `McpConfiguration`;
+  device parameters leave redacted. The remote listener is told apart by `Connection.LocalPort`, never
+  by `Host`, and always checks its token.
 
 ## Pitfalls
 
@@ -209,6 +218,10 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
 - Elsa's HTTP endpoint activities listen at `/workflows/*` here, apart from the designer's `/api/workflows`.
 - `Data/Manifest.json` is written into the image at build time. Don't make `/app/Data` a volume:
   a mount would hide it or keep an old copy. Persistent data belongs in `StoredObjects/`.
+- The remote MCP port joins the host's URLs (`UseUrls`; explicit Kestrel endpoints would replace
+  `ASPNETCORE_HTTP_PORTS`). `WebApplicationFactory.UseKestrel(port)` replaces them too, so the end-to-end
+  harness binds both ports. `UseRIoT2McpGate` (it calls `UseRouting()`) stays before `UseRIoT2Security()`.
+  `WithTools` needs an `IEnumerable<Type>`, or the SDK takes the list for a tool object.
 
 ## Related work
 

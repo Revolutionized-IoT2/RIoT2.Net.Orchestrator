@@ -5,7 +5,10 @@ platform. It stores the user's node, dashboard, variable and Matter bridge confi
 online nodes, routes MQTT reports and commands, and runs the Elsa 3 workflows: in process by
 default, or on the Elsa container over gRPC, either way through a durable outbox. It serves the UI's
 workflow designer and keeps the *Run LLM* step's model connections
-([ADR 0016](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0016-integrated-workflows-and-llm.md)).
+([ADR 0016](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0016-integrated-workflows-and-llm.md)). Optionally it is an MCP server, so AI assistants such as
+Claude and ChatGPT can read and control the home, also from the internet through Cloudflare Access
+([ADR 0018](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0018-mcp-server-and-remote-ai-access.md),
+[remote AI access guide](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/guides/remote-ai-access.md)).
 
 - Type: ASP.NET Core Web API / hub service
 - Target framework: .NET 10
@@ -27,6 +30,7 @@ How the orchestrator fits into the platform:
 | `Services/Automation/` | `IAutomationProvider` (ADR 0008): `EmbeddedAutomationProvider` (in process) or `ElsaAutomationProvider` (gRPC), both on `OutboxAutomationProvider` |
 | `Services/Workflows/` | `IWorkflowEngine` behind `/api/workflows`: `EmbeddedWorkflowEngine` or `RemoteWorkflowEngine`; `OrchestratorRIoTDataService` for the embedded activities |
 | `Services/Llm/` | Run LLM: connections (`LlmConnectionService`), the OpenAI-style and Anthropic adapters, the tools, `LlmService` (`ILlmRunner`) and the usage store |
+| `Services/Tools/`, `Services/Mcp/` | The tools Run LLM and MCP share (`RiotTools`); the MCP server: settings, tool policy and filters, the remote listener's token validation, the tools |
 | `Services/Commands/` | `CommandOutbox`: commands through the outbox, one dispatcher per node, and their results (design 7.1) |
 | `Services/Outbox/` | The durable outbox: SQLite store, dispatcher, health check (design 7.1) |
 | `Services/Persistence/` | The typed store `IStoredObjectStore`, its storage format `StoredObjectJson`, and the file-backed storage under `StoredObjects/` |
