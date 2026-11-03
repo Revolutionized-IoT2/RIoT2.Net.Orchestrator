@@ -1263,6 +1263,35 @@
         }
       }
     },
+    "/api/v2/system/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemHealth"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemHealth"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemHealth"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/Report/templates": {
       "get": {
         "tags": [
@@ -1662,6 +1691,52 @@
           }
         }
       },
+      "DeviceHealth": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "state": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DeviceState"
+              }
+            ]
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastError": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastErrorAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "DeviceState": {
+        "type": "integer"
+      },
       "FailedDevice": {
         "type": "object",
         "properties": {
@@ -1670,6 +1745,23 @@
           },
           "message": {
             "type": "string"
+          }
+        }
+      },
+      "HealthCheckEntry": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -1721,6 +1813,84 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "NodeHealth": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nodeType": {
+            "$ref": "#/components/schemas/NodeType"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "isOnline": {
+            "type": "boolean"
+          },
+          "since": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "pluginVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "syncState": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "configurationState": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastError": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PresenceEvent"
+            }
+          },
+          "devices": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/DeviceHealth"
+            }
+          },
+          "devicesUnavailable": {
+            "type": "boolean"
           }
         }
       },
@@ -1789,6 +1959,33 @@
             ],
             "items": {
               "$ref": "#/components/schemas/FailedDevice"
+            }
+          }
+        }
+      },
+      "NodeType": {
+        "type": "integer"
+      },
+      "OrchestratorHealth": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "started": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HealthCheckEntry"
             }
           }
         }
@@ -1931,6 +2128,22 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "PresenceEvent": {
+        "required": [
+          "at",
+          "isOnline"
+        ],
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "isOnline": {
+            "type": "boolean"
           }
         }
       },
@@ -2089,6 +2302,27 @@
         "type": "string",
         "format": "binary"
       },
+      "SystemHealth": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "orchestrator": {
+            "$ref": "#/components/schemas/OrchestratorHealth"
+          },
+          "outbox": {
+            "$ref": "#/components/schemas/OutboxSummary"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NodeHealth"
+            }
+          }
+        }
+      },
       "ValueModel": {
         "type": "object",
         "properties": {
@@ -2153,6 +2387,9 @@
     },
     {
       "name": "Report"
+    },
+    {
+      "name": "System"
     },
     {
       "name": "Variable"

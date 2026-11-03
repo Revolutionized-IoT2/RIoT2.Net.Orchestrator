@@ -27,6 +27,7 @@ How the orchestrator fits into the platform:
 | `Services/Outbox/` | The durable outbox: SQLite store, dispatcher, health check (design 7.1) |
 | `Services/Persistence/` | The typed store `IStoredObjectStore`, its storage format `StoredObjectJson`, and the file-backed storage under `StoredObjects/` |
 | `Services/Backup/` | Configuration backup and restore, and the backup schedule (design 7.4) |
+| `Services/Health/` | The health page's report (`GET /api/v2/system/health`) and the node history behind it (I46) |
 | `Services/OrchestratorMetrics.cs` | The `RIoT2.Orchestrator` meter: reports, workflow deliveries, outbox, commands, nodes (design 7.4) |
 | `Services/Templates/` | `ITemplateCatalog`, which shapes every REST template listing |
 | `Services/Matter/` | Matter Control Bridge: lifecycle, credentials, provisioning and bridged endpoints |
@@ -155,7 +156,7 @@ which Elsa deduplicates on:
 
 Pending triggers survive a restart. Final rows are deleted after 24 hours.
 `GET /api/v2/outbox/summary` shows the messages per status, the oldest pending message and the last
-ten errors.
+ten errors; `GET /api/v2/system/health` (the UI's System page) adds it to the node and device health.
 
 Commands go through the same outbox, from `POST /api/command/execute`,
 `POST /api/v2/commands`, Elsa and the Matter bridge. `CommandOutbox` runs one dispatcher per node,

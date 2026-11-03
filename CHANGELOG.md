@@ -5,6 +5,20 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-11-03
+
+The system health page ([I46](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-3-4.md#i46-system-health-page-m)).
+
+- Added: `GET /api/v2/system/health` (`SystemController`, viewer policy): the orchestrator's version,
+  start and `/health` checks, the outbox summary, and every node, connector and workflow engine it
+  knows (configured, or seen online since it started; no dashboards) with its online state, when that
+  state began and its presence changes, version, configuration sync, and for configured device nodes
+  every device's state now and the last error seen. Online device nodes are asked for their device
+  states, at most 5 s each.
+- Added: `NodeHistory`, fed by `OnlineNodeService`: the last 20 presence changes of up to 256 nodes,
+  and the last error of up to 1,024 devices (from a node's status and from its device states). It is
+  kept in memory, so it starts empty after a restart.
+
 ## [1.19.0] - 2026-11-03
 
 Core 2.0 ([I45](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-3-4.md#i45-core-20-remove-compatibility-layers-m)).

@@ -4,6 +4,7 @@ using RIoT2.Core.Models;
 using RIoT2.Core.Security;
 using RIoT2.Core.Utils;
 using RIoT2.Net.Orchestrator.Models;
+using RIoT2.Net.Orchestrator.Services.Health;
 
 namespace RIoT2.Net.Orchestrator.Services
 {
@@ -27,16 +28,21 @@ namespace RIoT2.Net.Orchestrator.Services
         private readonly ConcurrentDictionary<string, NodeStatusMessage> _statuses = new();
         private readonly IOrchestratorConfigurationService _configuration;
         private readonly IHttpClientFactory? _httpClientFactory;
+        private readonly NodeHistory _history;
         private ILogger<OnlineNodeService> _logger;
 
         public OnlineNodeService(IOrchestratorConfigurationService configuration, ILogger<OnlineNodeService> logger,
-            IHttpClientFactory? httpClientFactory = null)
+            IHttpClientFactory? httpClientFactory = null, NodeHistory? history = null)
         {
             _configuration = configuration;
             _logger = logger;
             _httpClientFactory = httpClientFactory;
+            _history = history ?? new NodeHistory(TimeProvider.System);
             _onlineNodes = new ConcurrentDictionary<string, OnlineNode>();
         }
+
+        /// <summary>Presence changes and device errors since the orchestrator started (the health page, I46).</summary>
+        public NodeHistory History => _history;
 
         public IEnumerable<OnlineNode> OnlineNodes { get { return _onlineNodes.Values; } }
 
@@ -50,19 +56,25 @@ namespace RIoT2.Net.Orchestrator.Services
                     existing.OnlineNodeSettings = node.OnlineNodeSettings;
                     return existing;
                 });
+            if (node.OnlineNodeSettings != null)
+                _history.Presence(node.Id, node.OnlineNodeSettings);
         }
 
         public void Remove(string id)
         {
             _onlineNodes.TryRemove(id, out _);
+            _history.Offline(id);
         }
 
         public void SetStatus(string id, NodeStatusMessage? status)
         {
             if (status == null)
+            {
                 _statuses.TryRemove(id, out _);
-            else
-                _statuses[id] = status;
+                return;
+            }
+            _statuses[id] = status;
+            _history.DeviceErrors(id, status.FailedDevices?.Select(d => ((string?)d.Id, (string?)null, (string?)d.Message)));
         }
 
         public NodeStatusMessage? GetStatus(string id) => _statuses.TryGetValue(id, out var status) ? status : null;
@@ -229,6 +241,9 @@ namespace RIoT2.Net.Orchestrator.Services
                 {
                     var json = await response.Content.ReadAsStringAsync();
                     var listOfDeviceStatus = Json.Deserialize<List<DeviceStatus>>(json);
+                    _history.DeviceErrors(nodeId, listOfDeviceStatus?
+                        .Where(s => s.State == DeviceState.Error)
+                        .Select(s => ((string?)s.Id, (string?)s.Name, (string?)s.Message)));
                     return listOfDeviceStatus;
                 }
             }

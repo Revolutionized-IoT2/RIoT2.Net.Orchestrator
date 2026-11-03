@@ -56,6 +56,9 @@ builder.Services.AddSingleton<IObjectStore>(s => s.GetRequiredService<FileObject
 builder.Services.AddSingleton<IObjectStoreArchive>(s => s.GetRequiredService<FileObjectStore>());
 builder.Services.AddSingleton<OrchestratorConfigurationService>();
 builder.Services.AddSingleton<IOrchestratorConfigurationService>(s => s.GetRequiredService<OrchestratorConfigurationService>());
+// The health page (I46): presence changes and device errors since the start, and the report.
+builder.Services.AddSingleton<RIoT2.Net.Orchestrator.Services.Health.NodeHistory>();
+builder.Services.AddSingleton<RIoT2.Net.Orchestrator.Services.Health.SystemHealthService>();
 builder.Services.AddSingleton<IOnlineNodeService, OnlineNodeService>();
 builder.Services.AddSingleton<StoredObjectService>();
 builder.Services.AddSingleton<IStoredObjectStore>(s => s.GetRequiredService<StoredObjectService>());
