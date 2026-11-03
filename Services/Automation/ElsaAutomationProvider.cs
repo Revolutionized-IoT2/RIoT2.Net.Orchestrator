@@ -1,84 +1,39 @@
-using Google.Protobuf;
 using Grpc.Core;
 using Microsoft.Extensions.Options;
 using RIoT2.Core;
 using RIoT2.Core.Models;
 using RIoT2.Core.Security;
-using RIoT2.Net.Orchestrator.Grpc;
 using RIoT2.Net.Orchestrator.Services.Outbox;
 
 namespace RIoT2.Net.Orchestrator.Services.Automation
 {
     /// <summary>
-    /// Elsa as the automation engine (ADR 0003, ADR 0008). Every report becomes a workflow trigger in the
-    /// outbox (design 7.1). The dispatcher delivers the triggers in order over gRPC
-    /// (<c>riot.RIoTTriggerService/Trigger</c>) to the online workflow node, with the row id as
-    /// <c>message_id</c>, which Elsa deduplicates on. Triggers wait while no workflow node is online,
-    /// are retried with backoff after a transient failure, and expire after
-    /// <see cref="OrchestratorOptions.WorkflowTriggerTtl"/>.
+    /// The remote workflow mode (RIOT2_WORKFLOW_MODE=remote; ADR 0003, ADR 0008, ADR 0016): the dispatcher delivers the
+    /// outbox's triggers over gRPC (<c>riot.RIoTTriggerService/Trigger</c>) to the online workflow host, with the row id as
+    /// <c>message_id</c>, which Elsa deduplicates on. Triggers wait while no workflow host is online.
     /// </summary>
-    internal sealed class ElsaAutomationProvider : BackgroundService, IAutomationProvider
+    internal sealed class ElsaAutomationProvider : OutboxAutomationProvider
     {
-        public const string Target = OutboxKind.Workflow;
-
-        private readonly OutboxStore _store;
         private readonly IOnlineNodeService _nodes;
-        private readonly ILogger<ElsaAutomationProvider> _logger;
-        private readonly TimeProvider _time;
-        private readonly TimeSpan _ttl;
         private readonly WorkflowTriggerClient _client;
-        private readonly OutboxDispatcher _dispatcher;
 
         public ElsaAutomationProvider(OutboxStore store, IOnlineNodeService nodes, IOptions<OrchestratorOptions> options,
             ILogger<ElsaAutomationProvider> logger, TimeProvider time, IOutboundUrlPolicy? outboundUrlPolicy = null)
+            : base(store, (options ?? throw new ArgumentNullException(nameof(options))).Value.WorkflowTriggerTtl, logger, time)
         {
-            _client = new WorkflowTriggerClient(options.Value.Security.ApiKey, outboundUrlPolicy);
-            _store = store ?? throw new ArgumentNullException(nameof(store));
             _nodes = nodes ?? throw new ArgumentNullException(nameof(nodes));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _time = time ?? throw new ArgumentNullException(nameof(time));
-            _ttl = options.Value.WorkflowTriggerTtl;
-            _dispatcher = new OutboxDispatcher(store, Target, "workflow trigger", () => FindEndpoint() != null, DeliverAsync, logger, time);
+            _client = new WorkflowTriggerClient(options.Value.Security.ApiKey, outboundUrlPolicy);
         }
 
-        public Task ReportReceivedAsync(Report report, CancellationToken cancellationToken)
-        {
-            ArgumentNullException.ThrowIfNull(report);
-            var now = _time.GetUtcNow().ToUnixTimeMilliseconds();
-            // ToJson returns null only when serialization throws; the protobuf setter rejects it as before.
-            var request = new TriggerRequest { Id = report.Id ?? "", Data = report.ToJson()! };
-            _store.Add(new OutboxMessage
-            {
-                Id = Guid.NewGuid().ToString("N"),
-                Kind = OutboxKind.Workflow,
-                Target = Target,
-                Subject = report.Id,
-                Payload = JsonFormatter.Default.Format(request),
-                CreatedUtc = now,
-                ExpiresUtc = now + (long)_ttl.TotalMilliseconds,
-                NextAttemptUtc = now,
-                UpdatedUtc = now
-            });
-            _dispatcher.Signal();
-            return Task.CompletedTask;
-        }
-
-        public void NodeOnlineChanged(string nodeId, NodeOnlineMessage message)
+        public override void NodeOnlineChanged(string nodeId, NodeOnlineMessage message)
         {
             if (message?.IsOnline == true && message.NodeType == NodeType.Workflow)
-                _dispatcher.TargetCameOnline();
+                Dispatcher.TargetCameOnline();
         }
 
-        protected override Task ExecuteAsync(CancellationToken stoppingToken) => _dispatcher.RunAsync(stoppingToken);
+        protected override bool IsEngineAvailable() => FindEndpoint() != null;
 
-        public override async Task StopAsync(CancellationToken cancellationToken)
-        {
-            await base.StopAsync(cancellationToken);
-            await _client.DisposeAsync();
-            var pending = _store.GetHealth(_time.GetUtcNow().ToUnixTimeMilliseconds()).Pending;
-            if (pending > 0)
-                _logger.LogInformation("{Count} outbox messages are pending; they are delivered after the restart unless their time-to-live has passed", pending);
-        }
+        protected override Task OnStoppedAsync() => _client.DisposeAsync().AsTask();
 
         private string? FindEndpoint()
         {
@@ -90,17 +45,16 @@ namespace RIoT2.Net.Orchestrator.Services.Automation
             return string.IsNullOrWhiteSpace(url) ? null : url;
         }
 
-        private async Task<DeliveryResult> DeliverAsync(OutboxMessage message, CancellationToken cancellationToken)
+        protected override async Task<DeliveryResult> DeliverAsync(OutboxMessage message, CancellationToken cancellationToken)
         {
             var url = FindEndpoint();
             if (url == null)
                 return DeliveryResult.Retry("No workflow node is online.");
-            var request = JsonParser.Default.Parse<TriggerRequest>(message.Payload);
-            request.MessageId = message.Id;
+            var request = ReadTrigger(message);
             // The call never outlives the trigger: past its time-to-live it must not reach Elsa, and
             // Elsa doesn't start a request whose deadline has passed.
             var expires = DateTimeOffset.FromUnixTimeMilliseconds(message.ExpiresUtc).UtcDateTime;
-            if (expires <= _time.GetUtcNow().UtcDateTime)
+            if (expires <= Time.GetUtcNow().UtcDateTime)
                 return DeliveryResult.Retry("The time-to-live passed before the trigger was sent.");
             try
             {

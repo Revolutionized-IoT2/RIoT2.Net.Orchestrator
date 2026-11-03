@@ -2,8 +2,10 @@
 
 Central ASP.NET Core service for the [RIoT2](https://github.com/Revolutionized-IoT2) IoT
 platform. It stores the user's node, dashboard, variable and Matter bridge configuration, tracks
-online nodes, routes MQTT reports and commands, and delivers accepted reports to Elsa 3 over gRPC
-through a durable outbox.
+online nodes, routes MQTT reports and commands, and runs the Elsa 3 workflows: in process by
+default, or on the Elsa container over gRPC, either way through a durable outbox. It serves the UI's
+workflow designer and keeps the *Run LLM* step's model connections
+([ADR 0016](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0016-integrated-workflows-and-llm.md)).
 
 - Type: ASP.NET Core Web API / hub service
 - Target framework: .NET 10
@@ -18,11 +20,13 @@ How the orchestrator fits into the platform:
 | Path | Contents |
 | --- | --- |
 | `Program.cs` | Host setup, logging, security seams, JSON profiles, health checks and DI registration |
-| `Controllers/` | REST API controllers for nodes, connectors, templates, state, dashboard, variables, commands, reports, Matter, the outbox and backups |
+| `Controllers/` | REST API controllers for nodes, connectors, templates, state, dashboard, variables, commands, reports, Matter, the outbox, backups, workflows and language models |
 | `Services/OrchestratorOptions.cs` | The `RIOT2_*` settings, read and validated at startup |
 | `Services/OrchestratorConfigurationService.cs` | Settings, stored configuration and template lookup |
 | `Services/OrchestratorMqttService.cs` | MQTT report/command routing and state updates; reports go on to the automation provider, commands to the command outbox |
-| `Services/Automation/` | `IAutomationProvider` and its only implementation, `ElsaAutomationProvider` (ADR 0008) |
+| `Services/Automation/` | `IAutomationProvider` (ADR 0008): `EmbeddedAutomationProvider` (in process) or `ElsaAutomationProvider` (gRPC), both on `OutboxAutomationProvider` |
+| `Services/Workflows/` | `IWorkflowEngine` behind `/api/workflows`: `EmbeddedWorkflowEngine` or `RemoteWorkflowEngine`; `OrchestratorRIoTDataService` for the embedded activities |
+| `Services/Llm/` | Run LLM: connections (`LlmConnectionService`), the OpenAI-style and Anthropic adapters, the tools, `LlmService` (`ILlmRunner`) and the usage store |
 | `Services/Commands/` | `CommandOutbox`: commands through the outbox, one dispatcher per node, and their results (design 7.1) |
 | `Services/Outbox/` | The durable outbox: SQLite store, dispatcher, health check (design 7.1) |
 | `Services/Persistence/` | The typed store `IStoredObjectStore`, its storage format `StoredObjectJson`, and the file-backed storage under `StoredObjects/` |
@@ -54,6 +58,8 @@ invalid setting, for example `Invalid orchestrator configuration: {problem}; {pr
 | `RIOT2_SECURITY_MODE`, `RIOT2_API_KEY`, … | No | The optional security mode; only `off` yet ([env-vars](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/env-vars.md#shared-variables)) |
 | `RIOT2_OUTBOX_WORKFLOW_TTL` | No | Seconds a workflow trigger waits for delivery before it expires; 1–86400, default 300 |
 | `RIOT2_OUTBOX_COMMAND_TTL` | No | Seconds a command waits for its node and its answer before it expires; 1–86400, default 30 |
+| `RIOT2_WORKFLOW_MODE` | No | `embedded` (default): Elsa runs here; `remote`: on the online Elsa container (1.21.0) |
+| `RIOT2_LATITUDE`, `RIOT2_LONGITUDE` | No | Embedded mode: where `RIoT Schedule` finds sunrise and sunset; both or neither |
 | `RIOT2_LOG_FORMAT` | No | `text` (default) or `json` for the console and `Logs/RIoT2.log` |
 | `RIOT2_LOG_LEVEL` | No | `Trace` … `Critical`; default `Information` |
 | `RIOT2_BACKUP_SCHEDULE` | No | Backups to `Backups/`: a Quartz cron expression with seconds, e.g. `0 0 3 * * ?`; unset is off |
@@ -91,8 +97,11 @@ Never copy values from `launchSettings.json`, `StoredObjects/`, `Logs/`, `Matter
 `StoredObjectService` keeps node configurations, variables and the dashboard in memory and
 stores them with System.Text.Json; `FileObjectStore` writes `StoredObjects/<TypeName>/<id>.json`,
 validating type names and ids. Types no longer read (the old `Rule/`) move to
-`StoredObjects/.archive/`. The outbox is `StoredObjects/outbox.db` (SQLite); include it in
-full-system backups, not in configuration backups. The stored formats are documented in the platform
+`StoredObjects/.archive/`. Every dashboard page, card and element has a stable `id`: one without an id gets a new
+one when the dashboard is loaded (in memory) and saved (stored); an existing id never changes. The outbox is `StoredObjects/outbox.db` (SQLite); include it in
+full-system backups, not in configuration backups. The same goes for the embedded workflows
+(`StoredObjects/elsa.sqlite.db`), the Run LLM usage (`llm-usage.db`) and the data protection keys that
+encrypt the connections' API keys (`StoredObjects/.keys/`). The stored formats are documented in the platform
 [configuration contract](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/configuration.md).
 
 The Matter Control Bridge is disabled by default. Enable and configure it through the UI or
@@ -141,12 +150,13 @@ state from its status ([desired state](https://github.com/Revolutionized-IoT2/.g
 Reports that match configured templates update state and history, are mirrored into Matter when a
 Matter endpoint is bound to the template, and become workflow triggers
 ([design 7.1](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/reliable-delivery.md)).
-`OrchestratorMqttService` hands each report to `IAutomationProvider`; `ElsaAutomationProvider`
-stores it as a trigger in the outbox before the next message is handled. A dispatcher delivers the
-triggers in order over gRPC to the online Elsa workflow node, with the outbox id as `message_id`,
-which Elsa deduplicates on:
+`OrchestratorMqttService` hands each report to `IAutomationProvider`, which stores it as a trigger
+in the outbox before the next message is handled. A dispatcher hands the triggers in order to Elsa,
+with the outbox id as `message_id`, which Elsa deduplicates on: in process with
+`RIOT2_WORKFLOW_MODE=embedded` (the default), or over gRPC to the online Elsa workflow node with
+`remote`. `/api/workflows` serves the UI's designer from the same engine.
 
-- No workflow node online: the triggers wait, and are delivered when Elsa announces itself.
+- No workflow node online (remote): the triggers wait, and are delivered when Elsa announces itself.
 - Transient failure (unreachable, five-second timeout, any gRPC error but
   `InvalidArgument`): retried after 1 s, 2 s, 4 s … at most 30 s; later triggers wait behind it.
 - Rejected (`success=false` or `InvalidArgument`): marked `failed`, logged as an error and not

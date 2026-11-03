@@ -24,6 +24,12 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="QRCoder" />
+    <!-- The embedded workflow engine (ADR 0016): Elsa with the RIoT activities, run in process when RIOT2_WORKFLOW_MODE=embedded. -->
+    <PackageReference Include="RIoT2.Elsa.Workflows" />
+    <!-- The alias keeps their Json namespace from hiding RIoT2.Core.Utils.Json. -->
+    <PackageReference Include="JsonSchema.Net" Aliases="JsonSchemaNet" />
+    <PackageReference Include="JsonPointer.Net" Aliases="JsonSchemaNet" />
+    <PackageReference Include="Json.More.Net" Aliases="JsonSchemaNet" />
     <PackageReference Include="Quartz" />
     <PackageReference Include="RIoT2.Matter" />
     <PackageReference Include="RIoT2.Matter.ControlBridge" />

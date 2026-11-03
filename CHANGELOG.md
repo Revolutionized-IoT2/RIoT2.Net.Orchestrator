@@ -5,6 +5,38 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+Planned as 1.21.0: workflows in the orchestrator, the designer's API and Run LLM ([I55](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-3-4.md#i55-integrated-workflows-and-run-llm-m),
+[ADR 0016](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0016-integrated-workflows-and-llm.md)). Needs Elsa 2.0.0 in the remote
+mode. Workflows from the Elsa container need moving, or `RIOT2_WORKFLOW_MODE=remote`: read the
+[upgrade notes](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/guides/upgrading.md#integrated-workflows-and-run-llm-elsa-200-orchestrator-1210-ui-1110).
+
+- Added: `RIOT2_WORKFLOW_MODE`. `embedded` (the default) runs Elsa 3.9 with the RIoT activities in
+  this process (the `RIoT2.Elsa.Workflows` package), stores workflows in `StoredObjects/elsa.sqlite.db`
+  and hands triggers from the outbox to the engine in process. `remote` keeps the gRPC delivery to
+  the Elsa container. `RIOT2_LATITUDE` and `RIOT2_LONGITUDE` locate sunrise and sunset for embedded
+  schedules. Elsa's HTTP endpoint activities listen at `/workflows/*`.
+- Added: `/api/workflows` (`WorkflowsController`) for the UI's designer: status, the activity
+  catalog, templates for the RIoT selectors, list, get, versions, save, import, export, publish,
+  retract, delete, runs and cancel. It's the same in both modes; in the remote mode it forwards to the
+  Elsa host and answers `503` while that is offline.
+- Added: `/api/llm` (`LlmController`): language model connections (OpenAI, Azure OpenAI, Anthropic,
+  OpenAI-compatible), with API keys encrypted by ASP.NET Data Protection (keys in
+  `StoredObjects/.keys`) and never returned; a connection test; `POST /api/llm/run` for Run LLM steps
+  (the remote host calls it); and the usage per connection and day from `StoredObjects/llm-usage.db`.
+  The steps' tools read values and send only the allowed commands, through the command outbox.
+- Changed: `IAutomationProvider` has two implementations on one outbox base,
+  `EmbeddedAutomationProvider` and `ElsaAutomationProvider` (remote). The Elsa meter is exported
+  with the others.
+- Changed: configuration backups restore `LlmConnection` objects. They don't contain the workflows
+  or the Data Protection keys (full-system backups do).
+- Changed: RIoT2.Core 2.2.0 (`RIoT2.Core.Contracts`, `.Http`, `.Mqtt`, `.Hosting`), for the UI's dashboard cards.
+- Fixed: the dashboard keeps the ids the UI gives its pages and cards; they were dropped on save. Every page, card
+  and element without an id gets a new one when the dashboard is loaded (in memory, so
+  `GET /api/dashboard/configuration` always has them) and when it's saved; an existing id never changes. A card's
+  `kind` and `settings` are stored as sent.
+- Added: the report and command template listings (`/api/nodes/report/templates`, `/api/nodes/command/templates`)
+  and the dashboard's templates carry a template's `schema` (Core 2.2.0), the device's description of the value.
+
 ## [1.20.0] - 2026-11-03
 
 The system health page ([I46](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-3-4.md#i46-system-health-page-m)).

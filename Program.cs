@@ -1,9 +1,16 @@
 using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.DataProtection;
+using Elsa.Extensions;
 using RIoT2.Core.Models;
+using RIoT2.Elsa.Workflows;
+using RIoT2.Elsa.Workflows.Llm;
+using RIoT2.Elsa.Workflows.Services;
+using RIoT2.Net.Orchestrator.Services.Llm;
 using RIoT2.Net.Orchestrator.Controllers;
 using RIoT2.Net.Orchestrator.CustomJsonSettings;
 using RIoT2.Net.Orchestrator.Services;
 using RIoT2.Net.Orchestrator.Services.Automation;
+using RIoT2.Net.Orchestrator.Services.Workflows;
 using RIoT2.Net.Orchestrator.Services.Backup;
 using RIoT2.Net.Orchestrator.Services.Commands;
 using RIoT2.Net.Orchestrator.Services.Outbox;
@@ -31,8 +38,12 @@ ILoggerFactory logger = builder.AddRIoT2Logging("orchestrator");
 Microsoft.Extensions.Logging.ILogger orchestratorLogger = logger.CreateLogger("RIoT2.Net.Orchestrator");
 
 // Metrics (and traces with RIOT2_TRACING=true) over OTLP, only when OTEL_EXPORTER_OTLP_ENDPOINT is set (design 7.4).
+// The embedded workflow engine adds Elsa's meter (riot2.workflow.*).
 if (!generatingOpenApiDocument)
-    builder.AddRIoT2Telemetry("orchestrator", builder.Configuration[OrchestratorOptions.IdVariable], MeterNames.Orchestrator);
+    builder.AddRIoT2Telemetry("orchestrator", builder.Configuration[OrchestratorOptions.IdVariable],
+        string.Equals(builder.Configuration[OrchestratorOptions.WorkflowModeVariable]?.Trim(), WorkflowModes.Remote, StringComparison.OrdinalIgnoreCase)
+            ? [MeterNames.Orchestrator]
+            : [MeterNames.Orchestrator, MeterNames.Elsa]);
 
 // Every RIOT2_* setting is read and validated here, before anything uses it; an invalid setting
 // stops the start with one message that lists every problem.
@@ -67,8 +78,42 @@ builder.Services.AddSingleton<ITemplateCatalog, TemplateCatalog>();
 builder.Services.AddSingleton(TimeProvider.System);
 // Durable delivery (design 7.1): workflow triggers wait in StoredObjects/outbox.db until Elsa takes them.
 builder.Services.AddSingleton(s => OutboxStore.Open(s.GetRequiredService<IWebHostEnvironment>()));
-builder.Services.AddSingleton<ElsaAutomationProvider>();
-builder.Services.AddSingleton<IAutomationProvider>(s => s.GetRequiredService<ElsaAutomationProvider>());
+// Where workflows run (RIOT2_WORKFLOW_MODE, ADR 0016): in this process, with Elsa's database in
+// StoredObjects/elsa.sqlite.db, or on the remote workflow host over gRPC and HTTP. The designer's API is the same.
+var embeddedWorkflows = orchestratorOptions.WorkflowMode == WorkflowModes.Embedded;
+if (embeddedWorkflows)
+{
+    if (!generatingOpenApiDocument)
+    {
+        builder.Services.AddRIoT2Workflows(new RIoT2WorkflowsOptions
+        {
+            ConnectionString = $"Data Source={Path.Combine(builder.Environment.ContentRootPath, "StoredObjects", "elsa.sqlite.db")};Cache=Shared;",
+            Location = orchestratorOptions.Location
+        });
+    }
+    builder.Services.AddSingleton<IRIoTDataService, OrchestratorRIoTDataService>();
+    builder.Services.AddSingleton<IWorkflowEngine, EmbeddedWorkflowEngine>();
+    builder.Services.AddSingleton<EmbeddedAutomationProvider>();
+    builder.Services.AddSingleton<OutboxAutomationProvider>(s => s.GetRequiredService<EmbeddedAutomationProvider>());
+}
+else
+{
+    builder.Services.AddSingleton<IWorkflowEngine, RemoteWorkflowEngine>();
+    builder.Services.AddSingleton<ElsaAutomationProvider>();
+    builder.Services.AddSingleton<OutboxAutomationProvider>(s => s.GetRequiredService<ElsaAutomationProvider>());
+}
+builder.Services.AddSingleton<IAutomationProvider>(s => s.GetRequiredService<OutboxAutomationProvider>());
+// Run LLM steps (ADR 0016): the connections (API keys encrypted with keys in StoredObjects/.keys, which backups leave
+// out), the model adapters, the tools, the usage records (StoredObjects/llm-usage.db), and the runner both modes use.
+builder.Services.AddDataProtection()
+    .SetApplicationName("RIoT2.Orchestrator")
+    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "StoredObjects", ".keys")));
+builder.Services.AddSingleton<LlmConnectionService>();
+builder.Services.AddSingleton<ILanguageModels, HttpLanguageModels>();
+builder.Services.AddSingleton<LlmToolbox>();
+builder.Services.AddSingleton(s => LlmUsageStore.Open(s.GetRequiredService<IWebHostEnvironment>(), s.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton<LlmService>();
+builder.Services.AddSingleton<ILlmRunner>(s => s.GetRequiredService<LlmService>());
 // Commands go through the same outbox, one dispatcher per node, and nodes answer with results.
 builder.Services.AddSingleton<CommandOutbox>();
 builder.Services.AddSingleton<ICommandOutbox>(s => s.GetRequiredService<CommandOutbox>());
@@ -94,7 +139,7 @@ if (!generatingOpenApiDocument)
 
     // Delivers the outbox's workflow triggers. Registered after MQTT, so it stops first, and the reports
     // MQTT still drains while stopping are stored for the next start.
-    builder.Services.AddHostedService(s => s.GetRequiredService<ElsaAutomationProvider>());
+    builder.Services.AddHostedService(s => s.GetRequiredService<OutboxAutomationProvider>());
 
     // Delivers the outbox's commands; also registered after MQTT, so it stops before MQTT does.
     builder.Services.AddHostedService(s => s.GetRequiredService<CommandOutbox>());
@@ -117,6 +162,14 @@ builder.Services.AddHttpClient(OnlineNodeService.HttpClientName, client => clien
     .AddHttpMessageHandler(services => new OutboundUrlPolicyHandler(services.GetRequiredService<IOutboundUrlPolicy>(), OutboundPurposes.Node));
 builder.Services.AddHttpClient(PluginsController.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(60))
     .AddHttpMessageHandler(services => new OutboundUrlPolicyHandler(services.GetRequiredService<IOutboundUrlPolicy>(), OutboundPurposes.Plugin));
+// The remote workflow host's management API (RIOT2_WORKFLOW_MODE=remote).
+builder.Services.AddHttpClient(RemoteWorkflowEngine.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(60))
+    .AddHttpMessageHandler(() => new ApiKeyHandler(orchestratorOptions.Security.ApiKey))
+    .AddHttpMessageHandler(services => new OutboundUrlPolicyHandler(services.GetRequiredService<IOutboundUrlPolicy>(), OutboundPurposes.Workflow));
+// Language model providers: never a redirect, never the RIoT2 API key; each Run LLM step bounds its calls.
+builder.Services.AddHttpClient(HttpLanguageModels.HttpClientName, client => client.Timeout = Timeout.InfiniteTimeSpan)
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false })
+    .AddHttpMessageHandler(services => new OutboundUrlPolicyHandler(services.GetRequiredService<IOutboundUrlPolicy>(), HttpLanguageModels.OutboundPurpose));
 
 var app = builder.Build();
 
@@ -150,5 +203,8 @@ app.UseRIoT2Security();
 app.MapHealthChecks("/health").AllowAnonymous();
 app.MapRIoT2SecurityInfo();
 app.MapControllers();
+// The embedded engine's HTTP endpoint activities, below /workflows.
+if (embeddedWorkflows && !generatingOpenApiDocument)
+    app.UseWorkflows();
 
 app.Run();

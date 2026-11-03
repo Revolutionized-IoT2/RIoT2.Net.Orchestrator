@@ -9,7 +9,7 @@ namespace RIoT2.Net.Orchestrator.Services.Templates
     /// <remarks>
     /// The listings are built on every call from the current configuration, so a saved node or
     /// variable shows up at once. Device parameters are not copied: the listings are read by the UI
-    /// and the workflow designer, which only need the template's identity and value model.
+    /// and the workflow designer, which only need the template's identity, value model and value schema.
     /// </remarks>
     public sealed class TemplateCatalog : ITemplateCatalog
     {
@@ -84,7 +84,8 @@ namespace RIoT2.Net.Orchestrator.Services.Templates
             Type = t.Type,
             Address = t.Address,
             Model = t.Model,
-            MaintainHistory = t.MaintainHistory
+            MaintainHistory = t.MaintainHistory,
+            Schema = t.Schema
         };
 
         private static NodeCommandTemplate ToNodeTemplate(NodeDeviceConfiguration node, DeviceConfiguration device, CommandTemplate t) => new()
@@ -97,7 +98,8 @@ namespace RIoT2.Net.Orchestrator.Services.Templates
             Id = t.Id,
             Type = t.Type,
             Address = t.Address,
-            Model = t.Model
+            Model = t.Model,
+            Schema = t.Schema
         };
     }
 }

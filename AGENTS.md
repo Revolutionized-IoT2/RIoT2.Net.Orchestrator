@@ -10,8 +10,10 @@ workspace map, platform-wide rules and the documentation rules. In the local wor
 
 An ASP.NET Core service targeting .NET 10. It is the hub of the RIoT2 platform: it stores node,
 dashboard, variable and Matter bridge configuration, tracks online nodes, routes MQTT reports and
-commands, and delivers accepted reports to Elsa 3 over gRPC through a durable SQLite outbox. It
-publishes the Docker image
+commands, and runs the Elsa 3 workflows through a durable SQLite outbox: in process
+(`RIOT2_WORKFLOW_MODE=embedded`, the default) or on the Elsa container over gRPC (`remote`). It serves
+the UI's workflow designer (`/api/workflows`) and the Run LLM connections (`/api/llm`)
+([ADR 0016](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0016-integrated-workflows-and-llm.md)). It publishes the Docker image
 `ghcr.io/revolutionized-iot2/riot2-orchestrator`.
 
 ## Commands
@@ -57,7 +59,7 @@ must keep them passing.
 | Path | Contents |
 |---|---|
 | `Program.cs` | ASP.NET Core host, logging (`AddRIoT2Logging()`), `AddRIoT2Security()`, JSON profiles, DI, health checks and hosted services |
-| `Controllers/` | REST controllers (`Viewer` by default, writes `Operator`/`Admin`), one per resource: nodes, connectors (`api/v2/connectors`), templates, state, variables, plugin and cron checks, dashboard, reports, commands (`api/v2/commands`), Matter, backup and the outbox. `DeprecatedGetAliasAttribute` marks the old state-changing `GET` routes |
+| `Controllers/` | REST controllers (`Viewer` by default, writes `Operator`/`Admin`), one per resource: nodes, connectors (`api/v2/connectors`), templates, state, variables, plugin and cron checks, dashboard, reports, commands (`api/v2/commands`), Matter, backup, the outbox, workflows (`api/workflows`) and language models (`api/llm`). `DeprecatedGetAliasAttribute` marks the old state-changing `GET` routes |
 | `CustomJsonSettings/` | `OrchestratorJsonOptions` (controller JSON settings; camelCase only since 1.19.0) |
 | `openapi/riot2-orchestrator.json` | Generated OpenAPI document (the REST route contract), committed |
 | `Services/OrchestratorOptions.cs` | Every `RIOT2_*` setting the orchestrator reads, validated at startup with Core's `SettingsReader` |
@@ -65,14 +67,16 @@ must keep them passing.
 | `Services/Templates/` | `ITemplateCatalog`: the only place that shapes the REST template listings |
 | `Services/OrchestratorMqttService.cs` | MQTT subscriptions/publications, state updates, Matter report mirroring; reports and presence go to `IAutomationProvider`, commands, results and presence to `ICommandOutbox`; it is the outbox's `ICommandTransport` |
 | `Services/Commands/` | `CommandOutbox` (one `OutboxDispatcher` per node, result waiting, late results) and `CommandDelivery` (the v2 status) |
-| `Services/Automation/` | `IAutomationProvider` (ADR 0008) and `ElsaAutomationProvider`, which stores triggers in the outbox and runs their dispatcher as a hosted service |
+| `Services/Automation/` | `IAutomationProvider` (ADR 0008): `OutboxAutomationProvider` stores triggers in the outbox and runs their dispatcher as a hosted service; `EmbeddedAutomationProvider` hands them to `RIoTTriggers` in process, `ElsaAutomationProvider` over gRPC |
+| `Services/Workflows/` | `IWorkflowEngine` (`/api/workflows`): `EmbeddedWorkflowEngine` (the management service in a scope) or `RemoteWorkflowEngine` (the host's `/riot/workflows`); `OrchestratorRIoTDataService` gives embedded activities values and commands |
+| `Services/Llm/` | `LlmConnectionService` (stored objects, API keys protected with Data Protection), `LanguageModels` (OpenAI chat and Anthropic HTTP adapters), `LlmToolbox`, `LlmService` (`ILlmRunner`), `LlmUsageStore` (`StoredObjects/llm-usage.db`) |
 | `Services/Outbox/` | `OutboxStore` (`StoredObjects/outbox.db`, plain SQL over `Microsoft.Data.Sqlite`), `OutboxDispatcher` (FIFO per target, backoff, TTL, cleanup), `OutboxHealthCheck` |
 | `Services/Persistence/` | `IStoredObjectStore` (typed; `StoredObjectService`), `StoredObjectJson` (storage format), the `StoredObjects/<Type>/<Id>.json` files, `IObjectStoreArchive` (export, replace, `.archive/`), `LegacyStoredObjects` |
 | `Services/OrchestratorMetrics.cs` | Meter `RIoT2.Orchestrator` (design 7.4); names in the hub's `contracts/metrics.md`, pinned by RIoT2.Tests |
 | `Services/Health/` | `NodeHistory` (presence changes and device errors since the start, in memory and bounded; fed by `OnlineNodeService`) and `SystemHealthService` (`GET /api/v2/system/health`, I46) |
 | `Services/Backup/` | Configuration backup and restore (design 7.4): `BackupArchive` (zip and manifest validation), `BackupService`, `BackupScheduler` (`RIOT2_BACKUP_SCHEDULE`) |
 | `Services/Matter/` | `MatterBridgeService` (lifecycle) with `MatterCredentials`, `MatterProvisioning`, `MatterHostNetwork` and `MatterBridgedEndpoints` (endpoints, reports, reachability) |
-| `Services/WorkflowTriggerClient.cs` | Reused gRPC client/channel with a five-second workflow trigger deadline; used only by `ElsaAutomationProvider` |
+| `Services/WorkflowTriggerClient.cs` | Reused gRPC client/channel with a five-second workflow trigger deadline; used only by `ElsaAutomationProvider` (remote mode) |
 | `Protos/riot_trigger.proto` | gRPC trigger contract, kept in lockstep with Elsa's `riot.proto` |
 | `Dockerfile` | .NET 10 multi-stage, Alpine, non-root, port 8080; bases pinned by digest |
 | `.github/workflows/ci.yml`, `release.yml` | CI on every push; GHCR image release on a tag |
@@ -96,6 +100,8 @@ topic or environment-variable tables here.
 - [configuration.md](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/configuration.md):
   `Services/OrchestratorConfigurationService.cs`, `Services/StoredObjectService.cs`,
   `Services/Persistence/FileObjectStore.cs` and `Services/Matter/`.
+- [dashboard.md](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/dashboard.md): the dashboard ids in
+  `Services/OrchestratorConfigurationService.cs`, and the templates' `schema` in `Services/Templates/TemplateCatalog.cs`.
 
 The gRPC service/message schema in `Protos/riot_trigger.proto` must stay compatible with
 `RIoT2.Elsa/RIoT2.Elsa.Server/RIoT/Protos/riot.proto`; only the generated C# namespace differs
@@ -119,18 +125,23 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
 - Use `RIoT2.Core.Constants.Get` / `GetTopicId` for topics and Core `Json.Serialize` /
   `Json.SerializeIgnoreNulls` for wire payloads that use Core models.
 - Keep the Core and Matter packages as package references: the Dockerfile restores from GitHub
-  Packages. Pins: `RIoT2.Core.Contracts`, `.Http`, `.Mqtt` and `.Hosting` `2.0.0` (never
+  Packages. Pins: `RIoT2.Core.Contracts`, `.Http`, `.Mqtt` and `.Hosting` `2.2.0` (never
   `.Node`; Quartz is a direct reference), `RIoT2.Matter` and `.ControlBridge` `1.1.0`, and the
   transitive `System.Security.Cryptography.Pkcs` `10.0.14`. `.localfeed` is only for unreleased versions.
 - `FileObjectStore` must validate type names and ids as file names. Never build persistence paths
   from raw ids.
+- Every dashboard page, card and element keeps a stable `id` (Core 2.2.0): `OrchestratorConfigurationService`
+  creates a missing one on load and save, and never changes an existing one. Card `kind` and `settings` are
+  stored as the UI sends them. Template listings and the dashboard's templates carry the device's `schema`.
 - Matter generated credentials and the fabric store must stay under a content-root-relative
   `CredentialsDirectory` (default `MatterCredentials`); reject absolute or escaping paths.
 - Bridged endpoint ids are stable (ADR 0010): never prune `MatterBridgeState.EndpointMap`; a new
   endpoint takes `NextUnusedEndpointId` (`MatterEndpointStabilityTests` in RIoT2.Tests).
 - Images must not contain credentials, IDs, IPs, `StoredObjects`, logs or local settings.
 - Keep the image on port `8080` and the non-root .NET app user.
-- Elsa 3 is the only automation engine; don't reintroduce the rule engine.
+- Elsa 3 is the only automation engine; don't reintroduce the rule engine. The workflow mode is read
+  once at start; register only one mode's provider and engine, and keep `/api/workflows` the same in
+  both (the UI doesn't know the mode). Activities never get an API key: Run LLM calls `ILlmRunner`.
 - Reach automation only through `IAutomationProvider` (ADR 0008); nothing outside
   `Services/Automation/` calls `WorkflowTriggerClient`. A trigger must be in the outbox before
   `ReportReceivedAsync` returns, and its outbox id is its `message_id`: never send a redelivery with
@@ -169,7 +180,7 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   same `message_id`; Elsa deduplicates it.
 - Delivery is FIFO per target, so a failing trigger holds up the ones behind it until it succeeds,
   fails or expires (at most `RIOT2_OUTBOX_WORKFLOW_TTL`, default 300 s).
-- `ElsaAutomationProvider` and `CommandOutbox` are singletons and, through factories, hosted
+- The automation provider (`OutboxAutomationProvider`) and `CommandOutbox` are singletons and, through factories, hosted
   services registered after `MqttBackgroundService`. They stop first, and the reports MQTT drains
   while stopping are stored for the next start. Keep that order.
 - `CommandOutbox` needs its transport: `OrchestratorMqttService` calls `UseTransport(this)` in its
@@ -189,6 +200,13 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   serve or hash a configuration you changed in place (`?state=true` works on a copy).
 - `Json.Serialize` camel-cases dictionary keys. Configuration `deviceParameters` should use
   camelCase keys because device lookups are case-sensitive.
+- Embedded Elsa's database is `StoredObjects/elsa.sqlite.db` and the Data Protection keys are in the
+  hidden `StoredObjects/.keys`: root files and hidden folders survive a configuration restore, which
+  moves away every other folder. Neither is in a configuration backup.
+- JsonSchema.Net (an Elsa dependency) has a global `Json` namespace that hides `RIoT2.Core.Utils.Json`.
+  The package and `JsonPointer.Net`, `Json.More.Net` are referenced with `Aliases="JsonSchemaNet"`;
+  use `extern alias JsonSchemaNet` where the schema types are needed.
+- Elsa's HTTP endpoint activities listen at `/workflows/*` here, apart from the designer's `/api/workflows`.
 - `Data/Manifest.json` is written into the image at build time. Don't make `/app/Data` a volume:
   a mount would hide it or keep an old copy. Persistent data belongs in `StoredObjects/`.
 

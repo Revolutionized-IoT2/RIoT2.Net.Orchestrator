@@ -144,6 +144,8 @@ namespace RIoT2.Net.Orchestrator.Services
                         Pages = []
                     };
                 }
+                // Not saved here: a dashboard stored without ids gets them persisted on its next save.
+                assignDashboardIds(_dashboardConfiguration);
                 refreshDashboardTemplates();
             }
             catch (Exception e)
@@ -294,6 +296,7 @@ namespace RIoT2.Net.Orchestrator.Services
                     }
                 }
 
+                assignDashboardIds(dashboard);
                 var id = _storedObjectService.Save(dashboard);
                 if (string.IsNullOrEmpty(id))
                     return null;
@@ -314,6 +317,32 @@ namespace RIoT2.Net.Orchestrator.Services
         {
             _storedObjectService.Delete<NodeDeviceConfiguration>(nodeId);
             _nodes = _storedObjectService.GetAll<NodeDeviceConfiguration>().ToList();
+        }
+
+        /// <summary>Creates the id of a new dashboard page, card or element. Tests replace it to get fixed ids.</summary>
+        internal Func<string> NewDashboardId { get; set; } = () => Guid.NewGuid().ToString();
+
+        // Every page, card and element gets a stable id (Core 2.2.0): a missing one is created, an existing one
+        // is never changed.
+        private void assignDashboardIds(DashboardConfiguration dashboard)
+        {
+            foreach (var page in dashboard.Pages ?? [])
+            {
+                if (string.IsNullOrEmpty(page.Id))
+                    page.Id = NewDashboardId();
+
+                foreach (var component in page.Components ?? [])
+                {
+                    if (string.IsNullOrEmpty(component.Id))
+                        component.Id = NewDashboardId();
+
+                    foreach (var element in component.Elements ?? [])
+                    {
+                        if (string.IsNullOrEmpty(element.Id))
+                            element.Id = NewDashboardId();
+                    }
+                }
+            }
         }
     }
 }

@@ -211,6 +211,7 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
                         nameof(Variable) => StoredObjectJson.Deserialize<Variable>(json),
                         nameof(MatterBridgeState) => Json.Deserialize<MatterBridgeState>(json),
                         nameof(MatterConfiguration) => Json.Deserialize<MatterConfiguration>(json),
+                        nameof(Llm.LlmConnection) => StoredObjectJson.Deserialize<Llm.LlmConnection>(json),
                         // Types this version doesn't use are restored as they are.
                         _ => json
                     };

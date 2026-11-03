@@ -1,4 +1,5 @@
 using RIoT2.Core.Configuration;
+using RIoT2.Net.Orchestrator.Services.Workflows;
 
 namespace RIoT2.Net.Orchestrator.Services
 {
@@ -13,6 +14,20 @@ namespace RIoT2.Net.Orchestrator.Services
         public const string CommandTtlVariable = "RIOT2_OUTBOX_COMMAND_TTL";
         public const string BackupScheduleVariable = "RIOT2_BACKUP_SCHEDULE";
         public const string BackupRetentionVariable = "RIOT2_BACKUP_RETENTION";
+        public const string WorkflowModeVariable = "RIOT2_WORKFLOW_MODE";
+
+        /// <summary>
+        /// Where workflows run (ADR 0016): <see cref="WorkflowModes.Embedded"/> in this process, or
+        /// <see cref="WorkflowModes.Remote"/> on a workflow host (the riot2-elsa container). <c>RIOT2_WORKFLOW_MODE</c>;
+        /// default <c>embedded</c>.
+        /// </summary>
+        public string WorkflowMode { get; set; } = WorkflowModes.Embedded;
+
+        /// <summary>
+        /// In the embedded mode, where <c>RIoT Schedule</c> calculates sunrise and sunset: <c>RIOT2_LATITUDE</c> and
+        /// <c>RIOT2_LONGITUDE</c>, both or neither, as the workflow host reads them. <c>null</c>: sun-based schedules don't fire.
+        /// </summary>
+        public RIoT2.Elsa.Workflows.Automation.GeoLocation? Location { get; set; }
 
         /// <summary>Unique id; also the MQTT client id.</summary>
         public string Id { get; set; }
@@ -77,8 +92,15 @@ namespace RIoT2.Net.Orchestrator.Services
                 WorkflowTriggerTtl = TimeSpan.FromSeconds(settings.Integer(WorkflowTriggerTtlVariable, 300, 1, 86400)),
                 CommandTtl = TimeSpan.FromSeconds(settings.Integer(CommandTtlVariable, 30, 1, 86400)),
                 BackupSchedule = settings.Optional(BackupScheduleVariable)?.Trim(),
-                BackupRetention = settings.Integer(BackupRetentionVariable, 7, 1, 365)
+                BackupRetention = settings.Integer(BackupRetentionVariable, 7, 1, 365),
+                WorkflowMode = (settings.Optional(WorkflowModeVariable)?.Trim().ToLowerInvariant()) is { Length: > 0 } mode ? mode : WorkflowModes.Embedded,
+                Location = RIoT2.Elsa.Workflows.Automation.GeoLocation.Read(name => settings.Optional(name), settings.AddError)
             };
+            if (options.WorkflowMode is not (WorkflowModes.Embedded or WorkflowModes.Remote))
+            {
+                settings.AddError($"{WorkflowModeVariable} must be {WorkflowModes.Embedded} or {WorkflowModes.Remote}");
+                options.WorkflowMode = WorkflowModes.Embedded;
+            }
             if (!string.IsNullOrEmpty(options.BackupSchedule) && !Backup.CronSchedule.IsValid(options.BackupSchedule))
             {
                 settings.AddError($"{BackupScheduleVariable} must be a Quartz cron expression with seconds, " +
