@@ -5,7 +5,9 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
-Planned as 1.21.0: workflows in the orchestrator, the designer's API and Run LLM ([I55](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-3-4.md#i55-integrated-workflows-and-run-llm-m),
+## [1.21.0] - 2026-11-03
+
+Workflows in the orchestrator, the designer's API and Run LLM ([I55](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-3-4.md#i55-integrated-workflows-and-run-llm-m),
 [ADR 0016](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0016-integrated-workflows-and-llm.md)). Needs Elsa 2.0.0 in the remote
 mode. Workflows from the Elsa container need moving, or `RIOT2_WORKFLOW_MODE=remote`: read the
 [upgrade notes](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/guides/upgrading.md#integrated-workflows-and-run-llm-elsa-200-orchestrator-1210-ui-1110).
