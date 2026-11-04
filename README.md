@@ -23,7 +23,7 @@ How the orchestrator fits into the platform:
 | Path | Contents |
 | --- | --- |
 | `Program.cs` | Host setup, logging, security seams, JSON profiles, health checks and DI registration |
-| `Controllers/` | REST API controllers for nodes, connectors, templates, state, dashboard, variables, commands, reports, Matter, the outbox, backups, workflows and language models |
+| `Controllers/` | REST API controllers for nodes, connectors, templates, state, dashboard, variables, commands, reports, Matter, the outbox, backups, workflows, language models and device sign-in |
 | `Services/OrchestratorOptions.cs` | The `RIOT2_*` settings, read and validated at startup |
 | `Services/OrchestratorConfigurationService.cs` | Settings, stored configuration and template lookup |
 | `Services/OrchestratorMqttService.cs` | MQTT report/command routing and state updates; reports go on to the automation provider, commands to the command outbox |
@@ -36,6 +36,7 @@ How the orchestrator fits into the platform:
 | `Services/Persistence/` | The typed store `IStoredObjectStore`, its storage format `StoredObjectJson`, and the file-backed storage under `StoredObjects/` |
 | `Services/Backup/` | Configuration backup and restore, and the backup schedule (design 7.4) |
 | `Services/Health/` | The health page's report (`GET /api/v2/system/health`) and the node history behind it (I46) |
+| `Services/DeviceSignIn/` | Device account sign-in (Core 2.4.0): the single-use OAuth states, the node calls and the callback page |
 | `Services/OrchestratorMetrics.cs` | The `RIoT2.Orchestrator` meter: reports, workflow deliveries, outbox, commands, nodes (design 7.4) |
 | `Services/Templates/` | `ITemplateCatalog`, which shapes every REST template listing |
 | `Services/Matter/` | Matter Control Bridge: lifecycle, credentials, provisioning and bridged endpoints |
@@ -187,6 +188,12 @@ so a node's commands keep their order, and the outbox id is the command's `corre
 `GET /api/v2/commands/{correlationId}` shows a delivery's status. The state-changing `GET` routes
 have `DELETE`/`POST` routes under `/api/v2`; the old routes still work,
 marked with `[DeprecatedGetAlias]`, which sends a `Deprecation` header and logs their first use.
+
+A device that signs in to a cloud account (Core 2.4.0, for example Netatmo) is connected from the UI: the
+orchestrator creates a single-use state, asks the node for the provider's sign-in page, and the provider sends the
+popup back to the anonymous `GET /api/oauth/callback`, which hands the code to the node. Register
+`<UI address>/api/oauth/callback` as the redirect URI in the provider's app: the UI proxies `/api` to the
+orchestrator, so the UI's address is the one the browser sees.
 
 ## Docker
 

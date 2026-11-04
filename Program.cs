@@ -13,6 +13,7 @@ using RIoT2.Net.Orchestrator.Services.Automation;
 using RIoT2.Net.Orchestrator.Services.Workflows;
 using RIoT2.Net.Orchestrator.Services.Backup;
 using RIoT2.Net.Orchestrator.Services.Commands;
+using RIoT2.Net.Orchestrator.Services.DeviceSignIn;
 using RIoT2.Net.Orchestrator.Services.Forecasts;
 using RIoT2.Net.Orchestrator.Services.Outbox;
 using RIoT2.Net.Orchestrator.Services.Matter;
@@ -74,6 +75,9 @@ builder.Services.AddSingleton<IOrchestratorConfigurationService>(s => s.GetRequi
 builder.Services.AddSingleton<RIoT2.Net.Orchestrator.Services.Health.NodeHistory>();
 builder.Services.AddSingleton<RIoT2.Net.Orchestrator.Services.Health.SystemHealthService>();
 builder.Services.AddSingleton<IOnlineNodeService, OnlineNodeService>();
+// Device account sign-in (Core 2.4.0): the pending states, in memory, and the calls to nodes.
+builder.Services.AddSingleton<DeviceAuthorizationStateStore>();
+builder.Services.AddSingleton<DeviceAuthorizationService>();
 builder.Services.AddSingleton<StoredObjectService>();
 builder.Services.AddSingleton<IStoredObjectStore>(s => s.GetRequiredService<StoredObjectService>());
 builder.Services.AddSingleton<IMessageStateService, MessageStateService>();

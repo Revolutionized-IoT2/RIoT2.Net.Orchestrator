@@ -213,6 +213,8 @@ namespace RIoT2.Net.Orchestrator.Services
                 // Parameter definitions describe the plugin, not the configuration: the UI reads them from the
                 // node's templates. Not storing them keeps stored files and hashes unchanged (Core 1.16.0).
                 dev.ParameterDefinitions = null;
+                // The same for the account sign-in descriptor (Core 2.4.0): the UI reads it from the node's templates.
+                dev.Authorization = null;
 
                 if (dev.ReportTemplates != null)
                 {

@@ -5,6 +5,26 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+Device account sign-in: a "Connect" button in the UI links a device to its cloud account with an OAuth 2.0
+authorization code (Netatmo first), instead of the user copying tokens. Needs `RIoT2.Core.*` 2.4.0 (pinned; packed
+locally, not yet on GitHub Packages) and a Node with the `/api/device/{id}/authorization/start` and `/complete` routes.
+Additive: existing routes and stored data are unchanged.
+
+- Added: `POST /api/Nodes/{nodeId}/devices/{deviceId}/authorization` (Admin), body `{ redirectUri, origin }`. It checks
+  that `redirectUri` is an absolute http(s) URL ending in `/api/oauth/callback` without user info, query or fragment,
+  and that `origin` is a bare `scheme://host[:port]`, creates a single-use state (32 random bytes, base64url, valid
+  10 minutes, at most 100 waiting, in memory), and asks the node for the provider's sign-in page:
+  `200 { authorizeUrl }`; 400 for a bad body; 404 for an offline node or a device the node doesn't have; 409 when the
+  device isn't ready (the node's message); 429 when 100 sign-ins wait; 502 when the node failed or didn't answer.
+- Added: `GET /api/oauth/callback`, anonymous: the provider's redirect. It takes the state (once, also on a provider
+  error), hands the code with the stored redirect URI to the node, and answers a small HTML page (`no-store`,
+  `no-referrer`, a nonce-based CSP) that posts `{ type: "riot2-device-authorization", nodeId, deviceId, success,
+  message }` to the stored origin and closes the popup. Unknown or expired state: 400, without a script. Neither the
+  code nor the state is logged.
+- Changed: a device configuration's `authorization` (the template's sign-in descriptor) is not stored, like
+  `parameterDefinitions`; stored files and hashes are unchanged.
+- Changed: `RIoT2.Core.Contracts`, `.Http`, `.Mqtt` and `.Hosting` 2.4.0.
+
 ## [1.23.0] - 2026-11-04
 
 Forecasts and command plans ([ADR 0019](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0019-forecasts-and-command-plans.md)).

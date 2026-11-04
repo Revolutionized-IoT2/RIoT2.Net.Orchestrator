@@ -76,6 +76,7 @@ must keep them passing.
 | `Services/Persistence/` | `IStoredObjectStore` (typed; `StoredObjectService`), `StoredObjectJson` (storage format), the `StoredObjects/<Type>/<Id>.json` files, `IObjectStoreArchive` (export, replace, `.archive/`), `LegacyStoredObjects` |
 | `Services/OrchestratorMetrics.cs` | Meter `RIoT2.Orchestrator` (design 7.4); names in the hub's `contracts/metrics.md`, pinned by RIoT2.Tests |
 | `Services/Health/` | `NodeHistory` (presence changes and device errors since the start, in memory and bounded; fed by `OnlineNodeService`) and `SystemHealthService` (`GET /api/v2/system/health`, I46) |
+| `Services/DeviceSignIn/` | Device sign-in: OAuth states, node calls, callback page |
 | `Services/Backup/` | Configuration backup and restore (design 7.4): `BackupArchive` (zip and manifest validation), `BackupService`, `BackupScheduler` (`RIOT2_BACKUP_SCHEDULE`) |
 | `Services/Matter/` | `MatterBridgeService` (lifecycle) with `MatterCredentials`, `MatterProvisioning`, `MatterHostNetwork` and `MatterBridgedEndpoints` (endpoints, reports, reachability) |
 | `Services/WorkflowTriggerClient.cs` | Reused gRPC client/channel with a five-second workflow trigger deadline; used only by `ElsaAutomationProvider` (remote mode) |
@@ -120,7 +121,8 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   aliases of `/api/v2` routes on the same action (`[DeprecatedGetAlias]`); don't add new ones, and
   remove them with backlog item 7.
 - Every action gets `[Authorize(Policy = SecurityPolicies.…)]` (design 7.5): `Viewer` reads,
-  `Operator` commands, `Admin` writes; the end-to-end suite fails otherwise. No ad-hoc auth.
+  `Operator` commands, `Admin` writes; the end-to-end suite fails otherwise. No ad-hoc auth. Only
+  `GET /api/oauth/callback` is `[AllowAnonymous]` (its `state` is the credential).
 - Outbound calls go through an `IHttpClientFactory` client with `OutboundUrlPolicyHandler`;
   only clients to RIoT2 services get `ApiKeyHandler`.
 - Validate every input, even on an isolated network.
@@ -129,7 +131,7 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
 - Use `RIoT2.Core.Constants.Get` / `GetTopicId` for topics and Core `Json.Serialize` /
   `Json.SerializeIgnoreNulls` for wire payloads that use Core models.
 - Keep the Core and Matter packages as package references: the Dockerfile restores from GitHub
-  Packages. Pins: `RIoT2.Core.Contracts`, `.Http`, `.Mqtt` and `.Hosting` `2.3.0` (never
+  Packages. Pins: `RIoT2.Core.Contracts`, `.Http`, `.Mqtt` and `.Hosting` `2.4.0` (never
   `.Node`; Quartz is a direct reference), `RIoT2.Elsa.Workflows` `2.1.0`, `RIoT2.Matter` and `.ControlBridge` `1.1.0`, and the
   transitive `System.Security.Cryptography.Pkcs` `10.0.14`. `.localfeed` is only for unreleased versions.
 - `FileObjectStore` must validate type names and ids as file names. Never build persistence paths
@@ -222,13 +224,11 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   `ASPNETCORE_HTTP_PORTS`). `WebApplicationFactory.UseKestrel(port)` replaces them too, so the end-to-end
   harness binds both ports. `UseRIoT2McpGate` (it calls `UseRouting()`) stays before `UseRIoT2Security()`.
   `WithTools` needs an `IEnumerable<Type>`, or the SDK takes the list for a tool object.
+- Device sign-in: never log or echo the OAuth `code` or `state`; post only to the stored origin. Behind the
+  UI's `/api` proxy the redirect URI is on the UI's origin.
 
 ## Related work
 
 - [Backlog items](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/backlog/open-issues.md) 2, 7, 13, 14, 17 and 18.
 - [Plans](https://github.com/Revolutionized-IoT2/.github/tree/main/docs/plans) M2, M3, M4, M7 and M8.
-- Designs
-  [7.1](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/reliable-delivery.md),
-  [7.2](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/desired-state-configuration.md),
-  [7.4](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/operations.md) and
-  [7.5](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/design/security-mode.md).
+- [Designs](https://github.com/Revolutionized-IoT2/.github/tree/main/docs/design) 7.1, 7.2, 7.4 and 7.5.
