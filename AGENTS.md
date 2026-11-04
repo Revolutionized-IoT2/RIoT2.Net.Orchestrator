@@ -143,6 +143,10 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   `CredentialsDirectory` (default `MatterCredentials`); reject absolute or escaping paths.
 - Bridged endpoint ids are stable (ADR 0010): never prune `MatterBridgeState.EndpointMap`; a new
   endpoint takes `NextUnusedEndpointId` (`MatterEndpointStabilityTests` in RIoT2.Tests).
+- A bridged thermostat's setpoint limits come from the bound setpoint commands' schema range
+  (`MatterEndpointComposer.GetThermostatLimits`), not from the template: Core's `MatterEndpointTemplate` has
+  no such property, and adding one would need a Core release and a Node that has it before a plugin could
+  use it. The limits are in the endpoint signature, so a changed range composes the endpoint again.
 - Images must not contain credentials, IDs, IPs, `StoredObjects`, logs or local settings.
 - Keep the image on port `8080` and the non-root .NET app user.
 - Elsa 3 is the only automation engine; don't reintroduce the rule engine. The workflow mode is read

@@ -214,7 +214,8 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
             _onlineNodes.OnlineNodes.Where(n => n.OnlineNodeSettings?.IsOnline == true)
                 .Select(n => n.Id).ToHashSet(StringComparer.Ordinal);
 
-        // The signature covers everything baked into a composed endpoint, so any change re-creates it.
+        // The signature covers everything baked into a composed endpoint, so any change re-creates it. That includes a
+        // thermostat's setpoint limits, which come from the bound commands' ranges rather than the template.
         private Dictionary<string, (string NodeId, DeviceConfiguration Device, MatterEndpointTemplate Template, string? Signature)> DesiredEndpoints()
         {
             var desired = new Dictionary<string, (string NodeId, DeviceConfiguration Device, MatterEndpointTemplate Template, string? Signature)>(StringComparer.Ordinal);
@@ -225,7 +226,13 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
                         if (string.IsNullOrEmpty(template?.Id))
                             continue;
                         var key = EndpointKey(device.Id, template.Id);
-                        var signature = Core.Utils.Json.SerializeIgnoreNulls(new { NodeId = node.Id, device.Name, Template = template });
+                        var signature = Core.Utils.Json.SerializeIgnoreNulls(new
+                        {
+                            NodeId = node.Id,
+                            device.Name,
+                            Template = template,
+                            Limits = MatterEndpointComposer.GetThermostatLimits(template, device)
+                        });
                         if (!desired.TryAdd(key, (node.Id, device, template, signature)))
                             throw new InvalidOperationException($"Duplicate Matter endpoint declaration: {key}.");
                     }
@@ -256,7 +263,7 @@ namespace RIoT2.Net.Orchestrator.Services.Matter
             var definition = new BridgedDeviceDefinition
             {
                 DeviceType = MatterEndpointComposer.Resolve(template.DeviceType),
-                ComposeApplicationClusters = MatterEndpointComposer.CreateComposer(template.DeviceType),
+                ComposeApplicationClusters = MatterEndpointComposer.CreateComposer(template.DeviceType, MatterEndpointComposer.GetThermostatLimits(template, device)),
                 NodeLabel = string.IsNullOrEmpty(template.Name) ? device.Name : template.Name,
                 Reachable = reachable,
                 Information = new BridgedDeviceInformation

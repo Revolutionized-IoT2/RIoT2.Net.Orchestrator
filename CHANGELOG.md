@@ -24,6 +24,11 @@ Additive: existing routes and stored data are unchanged.
 - Changed: a device configuration's `authorization` (the template's sign-in descriptor) is not stored, like
   `parameterDefinitions`; stored files and hashes are unchanged.
 - Changed: `RIoT2.Core.Contracts`, `.Http`, `.Mqtt` and `.Hosting` 2.4.0.
+- Changed: a bridged Matter thermostat takes its setpoint limits from the range (schema minimum and maximum) of the
+  command each setpoint is bound to, scaled like the binding, instead of always 7-30 °C heating and 16-32 °C cooling;
+  without a range the defaults stay. A Harvia sauna's 40-110 °C setpoint now fits, and the MELCloud, myUplink and
+  Themo thermostats get their units' own ranges. The limits are part of the endpoint's signature, so such a
+  thermostat is composed again once (under the same endpoint id) after the update.
 
 ## [1.23.0] - 2026-11-04
 
