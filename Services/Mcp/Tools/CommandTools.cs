@@ -48,5 +48,24 @@ namespace RIoT2.Net.Orchestrator.Services.Mcp.Tools
                 ? new CallToolResult { IsError = true, Content = [new TextContentBlock { Text = result.ToJsonString() }] }
                 : McpJson.Text(result.ToJsonString());
         }
+
+        [McpServerTool(Name = "plan_command", Title = "Plan a command", ReadOnly = false, Idempotent = false, Destructive = true, OpenWorld = true)]
+        [McpToolGroup(McpToolGroups.Commands, Write = true)]
+        [Description("Plans a command's values at future times, such as a heat pump's temperatures for the cheapest hours: the orchestrator " +
+            "sends each step's value at its time. The plan replaces the command's earlier plan. Only commands list_values marks 'allowed'. " +
+            "1-200 steps, at least a minute apart, within 7 days.")]
+        public CallToolResult PlanCommand(
+            [Description("The command's id from list_values.")] string id,
+            [Description("The steps: a list of { \"at\": an ISO 8601 time with a time zone, \"value\": the command's value from then on }.")] JsonElement steps,
+            [Description("A short name for the plan.")] string? name = null)
+        {
+            var allowed = configuration.Get().AllowedCommands;
+            if (string.IsNullOrWhiteSpace(id) || !allowed.Contains(id))
+                return McpJson.Error($"The command '{id}' is not allowed. Use list_values with kind 'command' to see the allowed ones.");
+            if (name is { Length: > 200 })
+                return McpJson.Error("The name is longer than 200 characters.");
+            var result = tools.PlanCommand(id, McpJson.Argument(steps), name, "MCP");
+            return result.ContainsKey("error") ? McpJson.Error((string?)result["error"] ?? "") : McpJson.Text(result.ToJsonString());
+        }
     }
 }

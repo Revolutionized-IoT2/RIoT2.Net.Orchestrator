@@ -5,7 +5,31 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
-Planned as 1.22.1.
+## [1.23.0] - 2026-11-04
+
+Forecasts and command plans ([ADR 0019](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0019-forecasts-and-command-plans.md)).
+Built on `RIoT2.Core.*` 2.3.0 and `RIoT2.Elsa.Workflows` 2.1.0. Additive: existing routes, tools and stored data are
+unchanged.
+
+- Added: forecasts. A report whose value is a forecast series (`ForecastSeries`) is also kept whole, the latest per
+  report, in `StoredObjects/forecasts.db`; an invalid series is logged and not kept. `GET /api/v2/forecasts` lists them,
+  and `GET /api/v2/forecasts/{id}` answers a window (`all`, `today`, `tomorrow`, `next` hours, `range`) with its
+  figures (`ForecastSummary`). Today and tomorrow are the orchestrator's local days.
+- Added: command plans. `POST /api/v2/command-plans` gives a command values at future times (1-200 steps, at least a
+  minute apart, 24 hours back to 7 days ahead); a plan replaces the command's active plan. Steps go through the command
+  outbox at their times, and are followed to their delivery status. After a pause only the latest missed step is
+  sent (`catchUp` `latest`), or none (`none`). `GET` lists and reads plans, `DELETE /api/v2/command-plans/{id}` and
+  `DELETE /api/v2/command-plans?commandId=` end them (Operator). Plans are kept in `StoredObjects/command-plans.db`
+  (finished ones for 30 days).
+- Added (embedded workflows): RIoT Forecast and RIoT Command Plan read forecasts and submit plans in process.
+- Added (Run LLM): `read_forecast` with the ReadValues tools, and `plan_command` with the new PlanCommands tool. It
+  plans only the step's allowed commands, and each plan counts against the command limit. The system prompt gives
+  the local time now. `list_values` marks forecast reports with `forecast: true`.
+- Added (MCP): `read_forecast` and `list_command_plans` (read), and `plan_command` (commands, a write, only for the
+  allowed commands).
+- Added: `GET /api/workflows/templates` marks forecast reports with `forecast: true`.
+
+## [1.22.1] - 2026-11-03
 
 - Fixed: `send_command` (MCP) and the Run LLM step's command tool could answer `sent` for a command that
   expired, because they stopped waiting exactly at its time-to-live; they now wait up to 2 s longer for

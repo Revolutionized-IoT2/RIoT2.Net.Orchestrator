@@ -3,9 +3,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using RIoT2.Core.Interfaces;
+using RIoT2.Core.Models;
 using RIoT2.Core.Security;
 using RIoT2.Elsa.Workflows.Management;
 using RIoT2.Elsa.Workflows.Models;
+using RIoT2.Net.Orchestrator.Services.Forecasts;
 using RIoT2.Net.Orchestrator.Services.Templates;
 using RIoT2.Net.Orchestrator.Services.Workflows;
 
@@ -21,7 +23,7 @@ namespace RIoT2.Net.Orchestrator.Controllers
     [Route("api/workflows")]
     [Authorize(Policy = SecurityPolicies.Viewer)]
     [WorkflowEngineErrors]
-    public class WorkflowsController(IWorkflowEngine engine, ITemplateCatalog templates) : ControllerBase
+    public class WorkflowsController(IWorkflowEngine engine, ITemplateCatalog templates, IForecastStore? forecasts = null) : ControllerBase
     {
         [HttpGet]
         [ProducesResponseType<IReadOnlyList<WorkflowSummary>>(StatusCodes.Status200OK)]
@@ -56,7 +58,11 @@ namespace RIoT2.Net.Orchestrator.Controllers
 
             var items = new List<WorkflowTemplateItem>();
             if (wanted.Contains(TemplateType.Report))
-                items.AddRange(templates.GetReportTemplates().Select(x => WorkflowTemplateItem.From(x, x.Node, x.Device, TemplateType.Report)));
+            {
+                var series = (forecasts?.List() ?? []).Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
+                items.AddRange(templates.GetReportTemplates().Select(x => WorkflowTemplateItem.From(x, x.Node, x.Device, TemplateType.Report,
+                    x.Schema?.Semantic == ValueSemantics.Forecast || series.Contains(x.Id))));
+            }
             if (wanted.Contains(TemplateType.Command))
                 items.AddRange(templates.GetCommandTemplates().Select(x => WorkflowTemplateItem.From(x, x.Node, x.Device, TemplateType.Command)));
             if (wanted.Contains(TemplateType.Variable))
@@ -160,11 +166,15 @@ namespace RIoT2.Net.Orchestrator.Controllers
             request?.Model ?? throw new ArgumentException("The request needs the workflow's definition model.");
     }
 
-    /// <summary>A report, command or variable a RIoT selector offers; the designer stores it in the input's literal.</summary>
-    public sealed record WorkflowTemplateItem(string Id, string Name, Core.ValueType Type, string? Node, string? Device, object? Model, TemplateType TemplateType)
+    /// <summary>
+    /// A report, command or variable a RIoT selector offers; the designer stores it in the input's literal. <see cref="Forecast"/>
+    /// (1.23.0) marks a report whose value is a forecast series, for <c>RIoT Forecast</c>'s selector.
+    /// </summary>
+    public sealed record WorkflowTemplateItem(string Id, string Name, Core.ValueType Type, string? Node, string? Device, object? Model, TemplateType TemplateType,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] bool? Forecast = null)
     {
-        public static WorkflowTemplateItem From(ITemplate template, string? node, string? device, TemplateType templateType) =>
-            new(template.Id, template.Name, template.Type, node, device, template.Model, templateType);
+        public static WorkflowTemplateItem From(ITemplate template, string? node, string? device, TemplateType templateType, bool forecast = false) =>
+            new(template.Id, template.Name, template.Type, node, device, template.Model, templateType, forecast ? true : null);
     }
 
     /// <summary>Answers 503 while the workflow engine is unreachable, and 400 for an invalid argument.</summary>

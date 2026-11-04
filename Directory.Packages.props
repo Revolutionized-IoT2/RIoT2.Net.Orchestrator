@@ -16,7 +16,7 @@
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.ApiDescription.Server" Version="10.0.12" />
     <!-- The embedded workflow engine (ADR 0016); the same version as the riot2-elsa image. -->
-    <PackageVersion Include="RIoT2.Elsa.Workflows" Version="2.0.0" />
+    <PackageVersion Include="RIoT2.Elsa.Workflows" Version="2.1.0" />
     <!-- Elsa's JSON schema packages, listed to give them the JsonSchemaNet alias (their Json namespace hides Core's Json);
          the LLM service checks JSON answers with them. At or above what Elsa needs. -->
     <PackageVersion Include="Json.More.Net" Version="3.0.1" />
@@ -27,10 +27,10 @@
     <PackageVersion Include="QRCoder" Version="1.6.0" />
     <!-- CronExpression for the backup schedule and /api/nodes/validatecron; the same version as RIoT2.Core.Node. -->
     <PackageVersion Include="Quartz" Version="3.13.1" />
-    <PackageVersion Include="RIoT2.Core.Contracts" Version="2.2.0" />
-    <PackageVersion Include="RIoT2.Core.Hosting" Version="2.2.0" />
-    <PackageVersion Include="RIoT2.Core.Http" Version="2.2.0" />
-    <PackageVersion Include="RIoT2.Core.Mqtt" Version="2.2.0" />
+    <PackageVersion Include="RIoT2.Core.Contracts" Version="2.3.0" />
+    <PackageVersion Include="RIoT2.Core.Hosting" Version="2.3.0" />
+    <PackageVersion Include="RIoT2.Core.Http" Version="2.3.0" />
+    <PackageVersion Include="RIoT2.Core.Mqtt" Version="2.3.0" />
     <PackageVersion Include="RIoT2.Matter" Version="1.1.0" />
     <PackageVersion Include="RIoT2.Matter.ControlBridge" Version="1.1.0" />
     <!-- Never below the patched 10.0.14 (GHSA-846f-f764-76mx, GHSA-2fmv-rv2c-59x7); RIoT2.Matter 1.1.0 uses it too. -->

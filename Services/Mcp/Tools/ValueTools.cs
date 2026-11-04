@@ -57,5 +57,35 @@ namespace RIoT2.Net.Orchestrator.Services.Mcp.Tools
             }
             return McpJson.Text(values.ToJsonString());
         }
+
+        [McpServerTool(Name = "read_forecast", Title = "Read a forecast", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
+        [McpToolGroup(McpToolGroups.Read)]
+        [Description("Reads a forecast report (list_values marks them 'forecast'): a weather forecast or electricity prices ahead. Gives the " +
+            "points { start, end, value } of a window with its min, max, time-weighted average, sum and the value now; with rank, the lowest " +
+            "and highest points (for example the cheapest hours). 'complete' tells whether the forecast covers the whole window.")]
+        public CallToolResult ReadForecast(
+            [Description("The report's id from list_values.")] string id,
+            [Description("today or tomorrow (local days), next (the next hours, the default), range (from until to) or all.")] string? window = null,
+            [Description("With next: 1-384 hours; default 24.")] int? hours = null,
+            [Description("With range: the start, ISO 8601.")] string? from = null,
+            [Description("With range: the end, ISO 8601.")] string? to = null,
+            [Description("How many lowest and highest points to list, 0-100.")] int? rank = null)
+        {
+            var value = tools.ReadForecast(id, window, hours, from, to, rank);
+            return value.ContainsKey("error") ? McpJson.Error((string?)value["error"] ?? "") : McpJson.Text(value.ToJsonString());
+        }
+
+        [McpServerTool(Name = "list_command_plans", Title = "List command plans", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
+        [McpToolGroup(McpToolGroups.Read)]
+        [Description("Lists the command plans, newest first: schedules of a command's future values that the orchestrator sends at their " +
+            "times, with each step's time, value and status.")]
+        public CallToolResult ListCommandPlans(
+            [Description("Only this command's plans.")] string? commandId = null,
+            [Description("Only the active plans; default true.")] bool activeOnly = true)
+        {
+            if (commandId is { Length: > 200 })
+                return McpJson.Error("The commandId is longer than 200 characters.");
+            return McpJson.Text(tools.ListPlans(commandId, activeOnly).ToJsonString());
+        }
     }
 }

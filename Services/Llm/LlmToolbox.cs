@@ -1,33 +1,41 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using RIoT2.Core.Models;
 using RIoT2.Elsa.Workflows.Llm;
 using RIoT2.Net.Orchestrator.Services.Commands;
+using RIoT2.Net.Orchestrator.Services.Forecasts;
 using RIoT2.Net.Orchestrator.Services.Persistence;
+using RIoT2.Net.Orchestrator.Services.Plans;
 using RIoT2.Net.Orchestrator.Services.Templates;
 using RIoT2.Net.Orchestrator.Services.Tools;
 
 namespace RIoT2.Net.Orchestrator.Services.Llm
 {
     /// <summary>
-    /// The tools a Run LLM step gives the model (ADR 0016). <see cref="LlmTools.ReadValues"/>: <c>list_values</c> and
-    /// <c>read_value</c> over the reports, commands and variables. <see cref="LlmTools.SendCommands"/>: <c>send_command</c>,
-    /// only for the step's allowed commands and at most its command limit, through the command outbox like every command,
-    /// waiting for the device's result as long as the step's time allows (at most 30 s). The values and commands are
-    /// <see cref="RiotTools"/>, which the MCP server shares (ADR 0018).
+    /// The tools a Run LLM step gives the model (ADR 0016). <see cref="LlmTools.ReadValues"/>: <c>list_values</c>, <c>read_value</c>
+    /// and <c>read_forecast</c> over the reports, commands, variables and forecasts. <see cref="LlmTools.SendCommands"/>:
+    /// <c>send_command</c>, only for the step's allowed commands and at most its command limit, through the command outbox like
+    /// every command, waiting for the device's result as long as the step's time allows (at most 30 s).
+    /// <see cref="LlmTools.PlanCommands"/> (ADR 0019): <c>plan_command</c>, a plan of future values for an allowed command, which
+    /// counts against the same limit. The values and commands are <see cref="RiotTools"/>, which the MCP server shares (ADR 0018).
     /// </summary>
     public sealed class LlmToolbox(
         ITemplateCatalog templates,
         IMessageStateService state,
         IStoredObjectStore storedObjects,
         IOrchestratorConfigurationService configuration,
-        ICommandOutbox commands)
+        ICommandOutbox commands,
+        IForecastStore? forecasts = null,
+        ICommandPlanService? plans = null)
     {
         public const string ListValues = "list_values";
         public const string ReadValue = "read_value";
+        public const string ReadForecast = "read_forecast";
         public const string SendCommand = "send_command";
+        public const string PlanCommand = "plan_command";
         public static readonly TimeSpan MaxCommandWait = RiotTools.MaxCommandWait;
 
-        private readonly RiotTools _tools = new(templates, state, storedObjects, configuration, commands);
+        private readonly RiotTools _tools = new(templates, state, storedObjects, configuration, commands, forecasts, plans);
 
         /// <summary>The tools for the step's allowed <see cref="LlmTools"/>.</summary>
         public static IReadOnlyList<ModelTool> For(LlmRunRequest request)
@@ -35,10 +43,21 @@ namespace RIoT2.Net.Orchestrator.Services.Llm
             var tools = new List<ModelTool>();
             if (request.Tools.Contains(LlmTools.ReadValues))
             {
-                tools.Add(new ModelTool(ListValues, "Lists the reports (device measurements and states), commands and variables, with their ids, names, nodes and devices.",
+                tools.Add(new ModelTool(ListValues, "Lists the reports (device measurements and states), commands and variables, with their ids, names, nodes and devices. Reports with 'forecast': true have values over time ahead; read them with read_forecast.",
                     Schema(new JsonObject { ["kind"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray("report", "command", "variable"), ["description"] = "Only this kind; omit for all." } })));
                 tools.Add(new ModelTool(ReadValue, "Reads the current value of a report, command or variable by its id.",
                     Schema(new JsonObject { ["id"] = new JsonObject { ["type"] = "string" } }, "id")));
+                tools.Add(new ModelTool(ReadForecast,
+                    "Reads a forecast report (weather forecast, electricity prices ahead): the points { start, end, value } of a window and its min, max, average and sum; with rank, the lowest and highest points.",
+                    Schema(new JsonObject
+                    {
+                        ["id"] = new JsonObject { ["type"] = "string" },
+                        ["window"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray(ForecastWindows.Names.Select(x => (JsonNode)JsonValue.Create(x)!).ToArray()), ["description"] = "today and tomorrow are local days; next: the next hours (default); range: from until to." },
+                        ["hours"] = new JsonObject { ["type"] = "integer", ["description"] = "With next: 1-384, default 24." },
+                        ["from"] = new JsonObject { ["type"] = "string", ["description"] = "With range: an ISO 8601 time." },
+                        ["to"] = new JsonObject { ["type"] = "string", ["description"] = "With range: an ISO 8601 time." },
+                        ["rank"] = new JsonObject { ["type"] = "integer", ["description"] = "How many lowest and highest points to list, 0-100." }
+                    }, "id")));
             }
             if (request.Tools.Contains(LlmTools.SendCommands) && request.AllowedCommands.Count > 0 && request.MaxCommands > 0)
             {
@@ -49,6 +68,26 @@ namespace RIoT2.Net.Orchestrator.Services.Llm
                         ["id"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray(request.AllowedCommands.Select(x => (JsonNode)JsonValue.Create(x)!).ToArray()) },
                         ["value"] = new JsonObject { ["description"] = "The command's value: a boolean, number, text or object, as the command expects." }
                     }, "id", "value")));
+            }
+            if (request.Tools.Contains(LlmTools.PlanCommands) && request.AllowedCommands.Count > 0 && request.MaxCommands > 0)
+            {
+                tools.Add(new ModelTool(PlanCommand,
+                    $"Plans a command's values at future times: the orchestrator sends each step's value at its time. The plan replaces the command's earlier plan. Allowed commands: {string.Join(", ", request.AllowedCommands)}. At most {request.MaxCommands} plans or commands per run.",
+                    Schema(new JsonObject
+                    {
+                        ["id"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray(request.AllowedCommands.Select(x => (JsonNode)JsonValue.Create(x)!).ToArray()) },
+                        ["steps"] = new JsonObject
+                        {
+                            ["type"] = "array",
+                            ["description"] = $"1-{CommandPlanService.MaxSteps} steps, at least a minute apart, within {CommandPlanService.Horizon.TotalDays:0} days.",
+                            ["items"] = Schema(new JsonObject
+                            {
+                                ["at"] = new JsonObject { ["type"] = "string", ["description"] = "When the value starts, ISO 8601 with a time zone, such as 2026-11-05T06:00:00Z." },
+                                ["value"] = new JsonObject { ["description"] = "The command's value from then on." }
+                            }, "at", "value")
+                        },
+                        ["name"] = new JsonObject { ["type"] = "string", ["description"] = "A short name for the plan." }
+                    }, "id", "steps")));
             }
             return tools;
         }
@@ -71,11 +110,37 @@ namespace RIoT2.Net.Orchestrator.Services.Llm
             {
                 ListValues when request.Tools.Contains(LlmTools.ReadValues) => _tools.List(arguments["kind"]?.ToString()).ToJsonString(),
                 ReadValue when request.Tools.Contains(LlmTools.ReadValues) => _tools.Read(arguments["id"]?.ToString()).ToJsonString(),
+                ReadForecast when request.Tools.Contains(LlmTools.ReadValues) => _tools.ReadForecast(arguments["id"]?.ToString(), arguments["window"]?.ToString(),
+                    Integer(arguments["hours"]), arguments["from"]?.ToString(), arguments["to"]?.ToString(), Integer(arguments["rank"])).ToJsonString(),
                 SendCommand when request.Tools.Contains(LlmTools.SendCommands) =>
                     (await SendAsync(arguments["id"]?.ToString(), arguments["value"], request, sent, deadline, time, cancellationToken)).ToJsonString(),
+                PlanCommand when request.Tools.Contains(LlmTools.PlanCommands) =>
+                    Plan(arguments["id"]?.ToString(), arguments["steps"], arguments["name"]?.ToString(), request, sent).ToJsonString(),
                 _ => Error($"There is no tool '{call.Name}'.")
             };
         }
+
+        private JsonObject Plan(string? id, JsonNode? steps, string? name, LlmRunRequest request, List<LlmSentCommand> sent)
+        {
+            if (string.IsNullOrWhiteSpace(id) || !request.AllowedCommands.Contains(id))
+                return ErrorObject($"The command '{id}' is not allowed; the allowed commands are {string.Join(", ", request.AllowedCommands)}.");
+            if (sent.Count >= request.MaxCommands)
+                return ErrorObject($"The limit of {request.MaxCommands} commands is reached.");
+            var source = $"Run LLM {request.WorkflowDefinitionId ?? "?"}/{request.ActivityId ?? "?"}";
+            var result = _tools.PlanCommand(id, steps, name, source);
+            if (!result.ContainsKey("error"))
+                sent.Add(new LlmSentCommand(id, steps?.DeepClone(), PlannedStatus));
+            return result;
+        }
+
+        /// <summary>The <see cref="LlmSentCommand.Status"/> of a plan the model made.</summary>
+        public const string PlannedStatus = "planned";
+
+        private static int? Integer(JsonNode? node) =>
+            node is JsonValue value && value.TryGetValue<int>(out var number) ? number
+            : node is JsonValue text && text.TryGetValue<string>(out var s) && int.TryParse(s, out var parsed) ? parsed
+            : node is JsonValue real && real.TryGetValue<double>(out var d) && d == Math.Floor(d) ? (int)d
+            : null;
 
         private async Task<JsonObject> SendAsync(string? id, JsonNode? value, LlmRunRequest request, List<LlmSentCommand> sent, DateTimeOffset deadline,
             TimeProvider time, CancellationToken cancellationToken)

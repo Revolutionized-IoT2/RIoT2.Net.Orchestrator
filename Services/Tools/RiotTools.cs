@@ -1,8 +1,11 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using RIoT2.Core.Models;
 using RIoT2.Net.Orchestrator.Services.Commands;
+using RIoT2.Net.Orchestrator.Services.Forecasts;
 using RIoT2.Net.Orchestrator.Services.Persistence;
+using RIoT2.Net.Orchestrator.Services.Plans;
 using RIoT2.Net.Orchestrator.Services.Templates;
 using CoreJson = RIoT2.Core.Utils.Json;
 
@@ -10,15 +13,18 @@ namespace RIoT2.Net.Orchestrator.Services.Tools
 {
     /// <summary>
     /// What AI tools can see and do, shared by the Run LLM step (<c>LlmToolbox</c>, ADR 0016) and the MCP server
-    /// (ADR 0018): the value catalog, current values, and commands through the command outbox. Callers add their own
-    /// limits (allowed commands, counts, rates); this class only validates input and reports results as JSON.
+    /// (ADR 0018): the value catalog, current values, forecasts, commands through the command outbox and command plans
+    /// (ADR 0019). Callers add their own limits (allowed commands, counts, rates); this class only validates input and
+    /// reports results as JSON.
     /// </summary>
     public sealed class RiotTools(
         ITemplateCatalog templates,
         IMessageStateService state,
         IStoredObjectStore storedObjects,
         IOrchestratorConfigurationService configuration,
-        ICommandOutbox commands)
+        ICommandOutbox commands,
+        IForecastStore? forecasts = null,
+        ICommandPlanService? plans = null)
     {
         public const string ReportKind = "report";
         public const string CommandKind = "command";
@@ -43,7 +49,11 @@ namespace RIoT2.Net.Orchestrator.Services.Tools
             var items = new JsonArray();
             if (Matches(kind, ReportKind))
                 foreach (var x in templates.GetReportTemplates())
+                {
                     Add(items, query, ReportKind, x.Id, x.Name, x.Node, x.Device, x.Type);
+                    if (IsForecast(x) && items.Count > 0 && (string?)items[^1]!["id"] == x.Id)
+                        items[^1]!["forecast"] = true;
+                }
             if (Matches(kind, CommandKind))
                 foreach (var x in templates.GetCommandTemplates())
                     Add(items, query, CommandKind, x.Id, x.Name, x.Node, x.Device, x.Type);
@@ -80,8 +90,7 @@ namespace RIoT2.Net.Orchestrator.Services.Tools
             if (string.IsNullOrEmpty(nodeId))
                 return null;
 
-            var command = CoreJson.Deserialize<Command>(CoreJson.Serialize(new Command { Id = id, Value = new ValueModel(ToObject(value)) }))
-                ?? throw new InvalidOperationException("The command could not be read.");
+            var command = CreateCommand(id, value);
             if (wait > MaxCommandWait)
                 wait = MaxCommandWait;
             if (wait < TimeSpan.FromSeconds(1))
@@ -99,6 +108,105 @@ namespace RIoT2.Net.Orchestrator.Services.Tools
             }
             return final ?? commands.Get(delivery.CorrelationId) ?? delivery;
         }
+
+        /// <summary>Whether a report's value is a forecast series: its schema says so, or a series has been received.</summary>
+        public bool IsForecast(NodeReportTemplate template) =>
+            template.Schema?.Semantic == ValueSemantics.Forecast || forecasts?.Get(template.Id) != null;
+
+        /// <summary>
+        /// A window of a forecast report (<see cref="ForecastWindows"/>; times as ISO 8601) with its figures, the points and the
+        /// <paramref name="rank"/> lowest and highest points; an object with <c>error</c> when there is none.
+        /// </summary>
+        public JsonObject ReadForecast(string? id, string? window = null, int? hours = null, string? from = null, string? to = null, int? rank = null)
+        {
+            if (forecasts == null)
+                return Error("Forecasts are not available here.");
+            if (string.IsNullOrWhiteSpace(id))
+                return Error("An id is required.");
+            if (!TryTime(from, out var start) || !TryTime(to, out var end))
+                return Error("from and to must be ISO 8601 times, such as 2026-11-05T06:00:00Z.");
+            ForecastSummary? summary;
+            try
+            {
+                summary = forecasts.Query(id, string.IsNullOrWhiteSpace(window) ? ForecastWindows.Next : window, hours, start, end, rank ?? 0);
+            }
+            catch (ArgumentException x)
+            {
+                return Error(x.Message);
+            }
+            if (summary == null)
+                return Error(templates.FindReportTemplate(id) == null ? $"There is no report '{id}'." : $"The report '{id}' has no forecast yet.");
+            return JsonNode.Parse(CoreJson.Serialize(summary)!)!.AsObject();
+        }
+
+        /// <summary>
+        /// Gives a command a plan of future values (<c>steps</c>: a list of <c>{ at, value }</c>), which replaces its active plan;
+        /// the plan without its steps' details, or an object with <c>error</c>.
+        /// </summary>
+        public JsonObject PlanCommand(string id, JsonNode? steps, string? name, string source)
+        {
+            if (plans == null)
+                return Error("Command plans are not available here.");
+            if (steps is not JsonArray list)
+                return Error("steps must be a list of { at, value }.");
+            List<CommandPlanStepRequest>? requested;
+            try
+            {
+                requested = list.Deserialize<List<CommandPlanStepRequest>>(CommandPlanStore.Json);
+            }
+            catch (JsonException x)
+            {
+                return Error($"The steps can't be read: {x.Message}");
+            }
+            var result = plans.Submit(new CommandPlanRequest { CommandId = id, Name = name, Steps = requested, Source = source });
+            if (!result.Succeeded)
+                return Error(result.Error ?? "The plan was refused.");
+            return PlanSummary(result.Plan!);
+        }
+
+        /// <summary>The command plans, newest first: only <paramref name="commandId"/>'s and only active ones when asked.</summary>
+        public JsonArray ListPlans(string? commandId, bool activeOnly, int limit = 20)
+        {
+            var items = new JsonArray();
+            foreach (var plan in plans?.List(commandId, activeOnly, limit) ?? [])
+                items.Add(PlanSummary(plan));
+            return items;
+        }
+
+        private const string TimeFormat = "yyyy-MM-dd'T'HH:mm:ssK";
+
+        private static JsonObject PlanSummary(CommandPlan plan) => new()
+        {
+            ["planId"] = plan.Id,
+            ["commandId"] = plan.CommandId,
+            ["name"] = plan.Name,
+            ["source"] = plan.Source,
+            ["status"] = plan.Status,
+            ["createdAt"] = plan.CreatedAt.ToString(TimeFormat, CultureInfo.InvariantCulture),
+            ["next"] = plan.Next?.ToString(TimeFormat, CultureInfo.InvariantCulture),
+            ["steps"] = new JsonArray(plan.Steps.Select(x => (JsonNode)new JsonObject
+            {
+                ["at"] = x.At.ToString(TimeFormat, CultureInfo.InvariantCulture),
+                ["value"] = x.Value?.DeepClone(),
+                ["status"] = x.Status
+            }).ToArray())
+        };
+
+        private static bool TryTime(string? text, out DateTimeOffset? time)
+        {
+            time = null;
+            if (string.IsNullOrWhiteSpace(text))
+                return true;
+            if (!DateTimeOffset.TryParse(text.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed))
+                return false;
+            time = parsed;
+            return true;
+        }
+
+        /// <summary>A command with the value a workflow's JavaScript would give, after the same JSON round trip as on the wire.</summary>
+        public static Command CreateCommand(string id, JsonNode? value) =>
+            CoreJson.Deserialize<Command>(CoreJson.Serialize(new Command { Id = id, Value = new ValueModel(ToObject(value)) }))
+                ?? throw new InvalidOperationException("The command could not be read.");
 
         /// <summary>A value as JSON: what <see cref="CoreJson"/> writes for it, or its text.</summary>
         public static JsonNode? Value(object? value)

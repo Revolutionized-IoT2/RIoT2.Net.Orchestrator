@@ -13,10 +13,12 @@ using RIoT2.Net.Orchestrator.Services.Automation;
 using RIoT2.Net.Orchestrator.Services.Workflows;
 using RIoT2.Net.Orchestrator.Services.Backup;
 using RIoT2.Net.Orchestrator.Services.Commands;
+using RIoT2.Net.Orchestrator.Services.Forecasts;
 using RIoT2.Net.Orchestrator.Services.Outbox;
 using RIoT2.Net.Orchestrator.Services.Matter;
 using RIoT2.Net.Orchestrator.Services.Mcp;
 using RIoT2.Net.Orchestrator.Services.Persistence;
+using RIoT2.Net.Orchestrator.Services.Plans;
 using RIoT2.Net.Orchestrator.Services.Templates;
 using RIoT2.Core.Diagnostics;
 using RIoT2.Core.Hosting;
@@ -121,6 +123,13 @@ builder.AddRIoT2Mcp(orchestratorOptions.Mcp);
 // Commands go through the same outbox, one dispatcher per node, and nodes answer with results.
 builder.Services.AddSingleton<CommandOutbox>();
 builder.Services.AddSingleton<ICommandOutbox>(s => s.GetRequiredService<CommandOutbox>());
+// Forecasts and command plans (ADR 0019): the latest series of every forecast report (StoredObjects/forecasts.db), and the
+// plans of commands' future values (StoredObjects/command-plans.db), sent at their times through the command outbox.
+builder.Services.AddSingleton(s => ForecastStore.Open(s.GetRequiredService<IWebHostEnvironment>(), s.GetRequiredService<TimeProvider>(), s.GetRequiredService<ITemplateCatalog>()));
+builder.Services.AddSingleton<IForecastStore>(s => s.GetRequiredService<ForecastStore>());
+builder.Services.AddSingleton(s => CommandPlanStore.Open(s.GetRequiredService<IWebHostEnvironment>()));
+builder.Services.AddSingleton<CommandPlanService>();
+builder.Services.AddSingleton<ICommandPlanService>(s => s.GetRequiredService<CommandPlanService>());
 builder.Services.AddSingleton<OrchestratorMqttService>();
 builder.Services.AddSingleton<IOrchestratorMqttService>(s => s.GetRequiredService<OrchestratorMqttService>());
 builder.Services.AddHealthChecks()
@@ -147,6 +156,9 @@ if (!generatingOpenApiDocument)
 
     // Delivers the outbox's commands; also registered after MQTT, so it stops before MQTT does.
     builder.Services.AddHostedService(s => s.GetRequiredService<CommandOutbox>());
+
+    // Sends the command plans' steps at their times (ADR 0019); through the command outbox, so after it.
+    builder.Services.AddHostedService(s => s.GetRequiredService<CommandPlanService>());
 
     //Start the Matter bridge with the application (it does nothing when disabled in its configuration)...
     builder.Services.AddHostedService<MatterBackgroundService>();

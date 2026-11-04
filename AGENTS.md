@@ -71,7 +71,7 @@ must keep them passing.
 | `Services/Automation/` | `IAutomationProvider` (ADR 0008): `OutboxAutomationProvider` stores triggers in the outbox and runs their dispatcher as a hosted service; `EmbeddedAutomationProvider` hands them to `RIoTTriggers` in process, `ElsaAutomationProvider` over gRPC |
 | `Services/Workflows/` | `IWorkflowEngine` (`/api/workflows`): `EmbeddedWorkflowEngine` (the management service in a scope) or `RemoteWorkflowEngine` (the host's `/riot/workflows`); `OrchestratorRIoTDataService` gives embedded activities values and commands |
 | `Services/Llm/` | `LlmConnectionService` (stored objects, API keys protected with Data Protection), `LanguageModels` (OpenAI chat and Anthropic HTTP adapters), `LlmToolbox`, `LlmService` (`ILlmRunner`), `LlmUsageStore` (`StoredObjects/llm-usage.db`) |
-| `Services/Tools/`, `Services/Mcp/` | `RiotTools` (values and commands for `LlmToolbox` and MCP); the MCP server ([mcp.md](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/mcp.md)): `McpOptions`, `McpServerSetup` (remote port gate, JWT profiles), `McpGuard` (filters and audit), `McpConfiguration`, `Tools/` |
+| `Services/Tools/`, `Services/Mcp/` | `RiotTools` (values, forecasts, commands, plans: `Services/Forecasts/`, `Plans/`) for `LlmToolbox` and MCP; the MCP server ([mcp.md](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/mcp.md)): `McpOptions`, `McpServerSetup` (remote port gate, JWT profiles), `McpGuard` (filters and audit), `McpConfiguration`, `Tools/` |
 | `Services/Outbox/` | `OutboxStore` (`StoredObjects/outbox.db`, plain SQL over `Microsoft.Data.Sqlite`), `OutboxDispatcher` (FIFO per target, backoff, TTL, cleanup), `OutboxHealthCheck` |
 | `Services/Persistence/` | `IStoredObjectStore` (typed; `StoredObjectService`), `StoredObjectJson` (storage format), the `StoredObjects/<Type>/<Id>.json` files, `IObjectStoreArchive` (export, replace, `.archive/`), `LegacyStoredObjects` |
 | `Services/OrchestratorMetrics.cs` | Meter `RIoT2.Orchestrator` (design 7.4); names in the hub's `contracts/metrics.md`, pinned by RIoT2.Tests |
@@ -129,8 +129,8 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
 - Use `RIoT2.Core.Constants.Get` / `GetTopicId` for topics and Core `Json.Serialize` /
   `Json.SerializeIgnoreNulls` for wire payloads that use Core models.
 - Keep the Core and Matter packages as package references: the Dockerfile restores from GitHub
-  Packages. Pins: `RIoT2.Core.Contracts`, `.Http`, `.Mqtt` and `.Hosting` `2.2.0` (never
-  `.Node`; Quartz is a direct reference), `RIoT2.Matter` and `.ControlBridge` `1.1.0`, and the
+  Packages. Pins: `RIoT2.Core.Contracts`, `.Http`, `.Mqtt` and `.Hosting` `2.3.0` (never
+  `.Node`; Quartz is a direct reference), `RIoT2.Elsa.Workflows` `2.1.0`, `RIoT2.Matter` and `.ControlBridge` `1.1.0`, and the
   transitive `System.Security.Cryptography.Pkcs` `10.0.14`. `.localfeed` is only for unreleased versions.
 - `FileObjectStore` must validate type names and ids as file names. Never build persistence paths
   from raw ids.
@@ -151,7 +151,7 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   `ReportReceivedAsync` returns, and its outbox id is its `message_id`: never send a redelivery with
   a new id.
 - Every device command goes through `ICommandOutbox` (`OrchestratorMqttService.ExecuteCommand`
-  enqueues). Its outbox id is its `correlationId`; a redelivery must repeat it, because nodes run an
+  and `CommandPlanService` enqueue). Its outbox id is its `correlationId`; a redelivery must repeat it, because nodes run an
   id only once. Set the command state only on `executed` or `duplicate` (or on `sent` to a node
   without `command-result/1`).
 - The outbox SQL is plain `Microsoft.Data.Sqlite`; no EF Core. A schema change raises

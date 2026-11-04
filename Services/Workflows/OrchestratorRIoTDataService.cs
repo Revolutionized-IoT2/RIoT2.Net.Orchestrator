@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using RIoT2.Core.Models;
@@ -6,7 +7,9 @@ using RIoT2.Elsa.Workflows.Models;
 using RIoT2.Elsa.Workflows.Services;
 using RIoT2.Net.Orchestrator.Models;
 using RIoT2.Net.Orchestrator.Services.Commands;
+using RIoT2.Net.Orchestrator.Services.Forecasts;
 using RIoT2.Net.Orchestrator.Services.Persistence;
+using RIoT2.Net.Orchestrator.Services.Plans;
 using CoreJson = RIoT2.Core.Utils.Json;
 
 namespace RIoT2.Net.Orchestrator.Services.Workflows
@@ -23,10 +26,47 @@ namespace RIoT2.Net.Orchestrator.Services.Workflows
         IStoredObjectStore storedObjects,
         IOrchestratorMqttService mqtt,
         ICommandOutbox commands,
-        IOptions<JsonOptions> mvcJson) : IRIoTDataService
+        IOptions<JsonOptions> mvcJson,
+        IForecastStore? forecasts = null,
+        ICommandPlanService? plans = null) : IRIoTDataService
     {
         /// <summary>The longest wait for a command's result, as <c>POST /api/v2/commands</c> allows.</summary>
         public const int MaxTtlSeconds = 86400;
+
+        public Task<ForecastSummary?> GetForecastAsync(string reportId, ForecastRequest request, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            if (forecasts == null)
+                throw new NotSupportedException("This orchestrator has no forecast store.");
+            var summary = forecasts.Query(reportId, request.Window, request.Hours, request.From, request.To, request.Rank);
+            // The same round trip as GET /api/v2/forecasts/{id}.
+            return Task.FromResult(summary == null ? null : CoreJson.Deserialize<ForecastSummary>(CoreJson.Serialize(summary)));
+        }
+
+        public Task<CommandPlanReceipt> SubmitCommandPlanAsync(CommandPlanSubmission plan, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(plan);
+            if (plans == null)
+                return Task.FromResult(CommandPlanReceipt.Failure("This orchestrator has no command plans."));
+            var result = plans.Submit(new CommandPlanRequest
+            {
+                CommandId = plan.CommandId,
+                Name = plan.Name,
+                Source = plan.Source,
+                CatchUp = plan.CatchUp,
+                Steps = plan.Steps.Select(x => new CommandPlanStepRequest { At = x.At, Value = JsonNode.Parse(new ValueModel(x.Value).ToJson()) }).ToList()
+            });
+            return Task.FromResult(result.Succeeded
+                ? new CommandPlanReceipt { Succeeded = true, PlanId = result.Plan!.Id, StepCount = result.Plan.Steps.Count }
+                : CommandPlanReceipt.Failure(result.Error ?? "The plan was refused."));
+        }
+
+        public Task<string?> CancelCommandPlanAsync(string commandId, CancellationToken cancellationToken = default)
+        {
+            if (plans == null)
+                throw new NotSupportedException("This orchestrator has no command plans.");
+            return Task.FromResult(plans.CancelActive(commandId)?.Id);
+        }
 
         public Task<object> GetReportValueAsync(string reportId)
         {

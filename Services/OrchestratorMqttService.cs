@@ -4,6 +4,7 @@ using RIoT2.Core;
 using RIoT2.Core.Models;
 using RIoT2.Net.Orchestrator.Services.Automation;
 using RIoT2.Net.Orchestrator.Services.Commands;
+using RIoT2.Net.Orchestrator.Services.Forecasts;
 using RIoT2.Net.Orchestrator.Services.Matter;
 using RIoT2.Net.Orchestrator.Services.Persistence;
 
@@ -19,6 +20,7 @@ namespace RIoT2.Net.Orchestrator.Services
         private readonly IAutomationProvider _automation;
         private readonly ICommandOutbox _commands;
         private readonly IMatterReportSink? _matterSink;
+        private readonly IForecastStore? _forecasts;
         private readonly ILogger _logger;
 
         private string _reportTopic;
@@ -34,7 +36,7 @@ namespace RIoT2.Net.Orchestrator.Services
         private Task? _stopTask;
         private int _disposed;
 
-        public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IMessageStateService deviceStateService, IStoredObjectStore storedObjectService, IOnlineNodeService onlineNodeService, IAutomationProvider automation, ICommandOutbox commands, ILogger<OrchestratorMqttService> logger, IMatterReportSink? matterSink = null, MqttClient? mqttClient = null)
+        public OrchestratorMqttService(IOrchestratorConfigurationService configuration, IMessageStateService deviceStateService, IStoredObjectStore storedObjectService, IOnlineNodeService onlineNodeService, IAutomationProvider automation, ICommandOutbox commands, ILogger<OrchestratorMqttService> logger, IMatterReportSink? matterSink = null, MqttClient? mqttClient = null, IForecastStore? forecasts = null)
         {
             _logger = logger;
             _storedObjectService = storedObjectService;
@@ -44,6 +46,7 @@ namespace RIoT2.Net.Orchestrator.Services
             _automation = automation ?? throw new ArgumentNullException(nameof(automation));
             _commands = commands ?? throw new ArgumentNullException(nameof(commands));
             _matterSink = matterSink;
+            _forecasts = forecasts;
 
             _reportTopic = Constants.Get("+", MqttTopic.Report); // Orchestrator is listening all reports...
             _nodeOnlineTopic = Constants.Get("+", MqttTopic.NodeOnline); // Orchestrator is listening all nodes...
@@ -274,6 +277,21 @@ namespace RIoT2.Net.Orchestrator.Services
                 OrchestratorMetrics.ReportsReceived.Add(1, OrchestratorMetrics.Tag("node", node));
 
                 _deviceStateService.SetState(report, template.MaintainHistory);
+
+                // A forecast series (ADR 0019) is also kept whole for window queries; a bad one is only logged.
+                if (_forecasts != null && report.Value?.Type == Core.ValueType.Entity)
+                {
+                    try
+                    {
+                        var problem = _forecasts.Receive(report);
+                        if (problem != null)
+                            _logger.LogWarning("Report {Report} looks like a forecast but isn't valid: {Problem}", report.Id, problem);
+                    }
+                    catch (Exception x) when (x is Microsoft.Data.Sqlite.SqliteException or IOException)
+                    {
+                        _logger.LogError(x, "Could not store the forecast of report {Report}", report.Id);
+                    }
+                }
 
                 //Mirror the report onto any Matter endpoint bound to it, so a controller sees the change
                 _matterSink?.OnReport(report);

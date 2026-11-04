@@ -79,7 +79,7 @@ namespace RIoT2.Net.Orchestrator.Services.Llm
             {
                 while (true)
                 {
-                    var response = await model.CompleteAsync(new ModelRequest(SystemPrompt(request, tools, schema), messages, tools, json, schema), timeout.Token);
+                    var response = await model.CompleteAsync(new ModelRequest(SystemPrompt(request, tools, schema, time.GetUtcNow()), messages, tools, json, schema), timeout.Token);
                     input += response.InputTokens;
                     output += response.OutputTokens;
                     if (response.ToolCalls.Count == 0)
@@ -141,14 +141,18 @@ namespace RIoT2.Net.Orchestrator.Services.Llm
             return new LlmRunResult { Succeeded = true, Text = text, Json = node, Usage = usage, ToolCalls = toolCalls, Commands = sent };
         }
 
-        private static string SystemPrompt(LlmRunRequest request, IReadOnlyList<ModelTool> tools, JsonObject? schema)
+        private static string SystemPrompt(LlmRunRequest request, IReadOnlyList<ModelTool> tools, JsonObject? schema, DateTimeOffset now)
         {
+            var local = TimeZoneInfo.ConvertTime(now, TimeZoneInfo.Local);
             var prompt = new StringBuilder("You are a step of an automation workflow in RIoT2, a home and building automation system. "
-                + "Do what the instructions ask, using the input data. Be brief and factual.");
+                + "Do what the instructions ask, using the input data. Be brief and factual. "
+                + $"The time now is {local.ToString("yyyy-MM-dd'T'HH:mm:sszzz", System.Globalization.CultureInfo.InvariantCulture)} ({local.ToString("dddd", System.Globalization.CultureInfo.InvariantCulture)}).");
             if (tools.Any(x => x.Name == LlmToolbox.ReadValue))
-                prompt.Append(" Use list_values and read_value to look up the current reports, commands and variables when you need them.");
+                prompt.Append(" Use list_values and read_value to look up the current reports, commands and variables when you need them, and read_forecast for forecasts and prices ahead.");
             if (tools.Any(x => x.Name == LlmToolbox.SendCommand))
                 prompt.Append($" Send a command with send_command only when the instructions call for it; you may send at most {request.MaxCommands}.");
+            if (tools.Any(x => x.Name == LlmToolbox.PlanCommand))
+                prompt.Append(" Plan a command's future values with plan_command when the instructions ask for a schedule; times are ISO 8601 with a time zone.");
             if (request.ResponseFormat == LlmResponseFormats.Json)
             {
                 prompt.Append(" Answer with a single JSON value only, without any other text or code fences.");
