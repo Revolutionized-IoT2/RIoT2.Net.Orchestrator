@@ -5,8 +5,16 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+Planned as 1.22.1.
+
+- Fixed: `send_command` (MCP) and the Run LLM step's command tool could answer `sent` for a command that
+  expired, because they stopped waiting exactly at its time-to-live; they now wait up to 2 s longer for
+  the outbox to record `expired`.
+
+## [1.22.0] - 2026-11-03
+
 The MCP server and remote AI access ([I57](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-3-4.md#i57-mcp-server-and-remote-ai-access-m),
-[ADR 0018](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0018-mcp-server-and-remote-ai-access.md)). Planned as 1.22.0.
+[ADR 0018](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0018-mcp-server-and-remote-ai-access.md)).
 
 - Added: an MCP server (`ModelContextProtocol.AspNetCore`, Streamable HTTP, stateless) at `/mcp` with
   `RIOT2_MCP_ENABLED=true`. Tools in groups: values (`list_values`, `read_value`, `read_values`), health

@@ -29,6 +29,12 @@ namespace RIoT2.Net.Orchestrator.Services.Tools
         public static readonly TimeSpan MaxCommandWait = TimeSpan.FromSeconds(30);
 
         /// <summary>
+        /// How long past its time-to-live a tool keeps waiting for the delivery: the outbox expires it on its next step, so
+        /// stopping exactly at the time-to-live could report it still <c>sent</c>.
+        /// </summary>
+        public static readonly TimeSpan ExpiryGrace = TimeSpan.FromSeconds(2);
+
+        /// <summary>
         /// The reports, commands and variables, with their ids, names, nodes, devices and types: only <paramref name="kind"/>
         /// when given, and only those whose name, id, node or device contains <paramref name="query"/> (any case) when given.
         /// </summary>
@@ -64,8 +70,8 @@ namespace RIoT2.Net.Orchestrator.Services.Tools
         }
 
         /// <summary>
-        /// Queues a command for its node and waits up to <paramref name="wait"/> (1 s to <see cref="MaxCommandWait"/>) for its
-        /// final status. <c>null</c> when no node has the command.
+        /// Queues a command for its node, with <paramref name="wait"/> (1 s to <see cref="MaxCommandWait"/>) as its time-to-live,
+        /// and waits for its final status, at most <see cref="ExpiryGrace"/> longer. <c>null</c> when no node has the command.
         /// </summary>
         public async Task<CommandDelivery?> SendAsync(string id, JsonNode? value, TimeSpan wait, CancellationToken cancellationToken)
         {
@@ -82,7 +88,7 @@ namespace RIoT2.Net.Orchestrator.Services.Tools
                 wait = TimeSpan.FromSeconds(1);
             var delivery = commands.Enqueue(command, nodeId, wait);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(wait);
+            timeout.CancelAfter(wait + ExpiryGrace);
             CommandDelivery? final = null;
             try
             {
