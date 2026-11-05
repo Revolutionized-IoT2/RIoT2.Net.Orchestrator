@@ -39,16 +39,9 @@ $env:RIOT2_MQTT_PASSWORD = ""
 dotnet run --project .\RIoT2.Net.Orchestrator\RIoT2.Net.Orchestrator.csproj
 ```
 
-Build the container from this repository root (`C:\Src\RIoT2\RIoT2.Net.Orchestrator`):
-
-```powershell
-$env:NUGET_AUTH_TOKEN = '<github-package-token>'   # a BuildKit secret, never a build argument
-docker build --secret id=nuget_token,env=NUGET_AUTH_TOKEN -t riot2-orchestrator .
-```
-
-Every push runs `.github/workflows/ci.yml` (build, image build, secret scan). To release, push a
-clean git tag `x.y.z`: `release.yml` validates, then pushes
-`ghcr.io/revolutionized-iot2/riot2-orchestrator:latest` and `:<tag>` ([CI guide](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/guides/ci.md)). The
+Build and run the container as in the README's [Docker](README.md#docker) section; the package-feed
+token is a BuildKit secret, never a build argument. CI and releases: [Versions and releases](README.md#versions-and-releases)
+and the [CI guide](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/guides/ci.md). The
 Dockerfile writes `Data/Manifest.json` from the `VERSION` and `IMAGE_TAG` build arguments, and has
 a `HEALTHCHECK` on `/health` that reads the port from `ASPNETCORE_HTTP_PORTS`.
 The cross-repository tests in RIoT2.Tests build this repository's `main` nightly; the end-to-end
@@ -57,33 +50,19 @@ must keep them passing.
 
 ## Layout
 
-| Path | Contents |
-|---|---|
-| `Program.cs` | ASP.NET Core host, logging (`AddRIoT2Logging()`), `AddRIoT2Security()`, JSON profiles, DI, health checks and hosted services |
-| `Controllers/` | REST controllers (`Viewer` by default, writes `Operator`/`Admin`), one per resource: nodes, connectors (`api/v2/connectors`), templates, state, variables, plugin and cron checks, dashboard, reports, commands (`api/v2/commands`), Matter, backup, the outbox, workflows (`api/workflows`) and language models (`api/llm`). `DeprecatedGetAliasAttribute` marks the old state-changing `GET` routes |
-| `CustomJsonSettings/` | `OrchestratorJsonOptions` (controller JSON settings; camelCase only since 1.19.0) |
-| `openapi/riot2-orchestrator.json` | Generated OpenAPI document (the REST route contract), committed |
-| `Services/OrchestratorOptions.cs` | Every `RIOT2_*` setting the orchestrator reads, validated at startup with Core's `SettingsReader` |
-| `Services/OrchestratorConfigurationService.cs` | Settings from `IOptions<OrchestratorOptions>`, stored node/dashboard configuration and template lookup |
-| `Services/Templates/` | `ITemplateCatalog`: the only place that shapes the REST template listings |
-| `Services/OrchestratorMqttService.cs` | MQTT subscriptions/publications, state updates, Matter report mirroring; reports and presence go to `IAutomationProvider`, commands, results and presence to `ICommandOutbox`; it is the outbox's `ICommandTransport` |
-| `Services/Commands/` | `CommandOutbox` (one `OutboxDispatcher` per node, result waiting, late results) and `CommandDelivery` (the v2 status) |
-| `Services/Automation/` | `IAutomationProvider` (ADR 0008): `OutboxAutomationProvider` stores triggers in the outbox and runs their dispatcher as a hosted service; `EmbeddedAutomationProvider` hands them to `RIoTTriggers` in process, `ElsaAutomationProvider` over gRPC |
-| `Services/Workflows/` | `IWorkflowEngine` (`/api/workflows`): `EmbeddedWorkflowEngine` (the management service in a scope) or `RemoteWorkflowEngine` (the host's `/riot/workflows`); `OrchestratorRIoTDataService` gives embedded activities values and commands |
-| `Services/Llm/` | `LlmConnectionService` (stored objects, API keys protected with Data Protection), `LanguageModels` (OpenAI chat and Anthropic HTTP adapters), `LlmToolbox`, `LlmService` (`ILlmRunner`), `LlmUsageStore` (`StoredObjects/llm-usage.db`) |
-| `Services/Tools/`, `Services/Mcp/` | `RiotTools` (values, forecasts, commands, plans: `Services/Forecasts/`, `Plans/`) for `LlmToolbox` and MCP; the MCP server ([mcp.md](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/contracts/mcp.md)): `McpOptions`, `McpServerSetup` (remote port gate, JWT profiles), `McpGuard` (filters and audit), `McpConfiguration`, `Tools/` |
-| `Services/Outbox/` | `OutboxStore` (`StoredObjects/outbox.db`, plain SQL over `Microsoft.Data.Sqlite`), `OutboxDispatcher` (FIFO per target, backoff, TTL, cleanup), `OutboxHealthCheck` |
-| `Services/Persistence/` | `IStoredObjectStore` (typed; `StoredObjectService`), `StoredObjectJson` (storage format), the `StoredObjects/<Type>/<Id>.json` files, `IObjectStoreArchive` (export, replace, `.archive/`), `LegacyStoredObjects` |
-| `Services/OrchestratorMetrics.cs` | Meter `RIoT2.Orchestrator` (design 7.4); names in the hub's `contracts/metrics.md`, pinned by RIoT2.Tests |
-| `Services/Health/` | `NodeHistory` (presence changes and device errors since the start, in memory and bounded; fed by `OnlineNodeService`) and `SystemHealthService` (`GET /api/v2/system/health`, I46) |
-| `Services/DeviceSignIn/` | Device sign-in: OAuth states, node calls, callback page |
-| `Services/Backup/` | Configuration backup and restore (design 7.4): `BackupArchive` (zip and manifest validation), `BackupService`, `BackupScheduler` (`RIOT2_BACKUP_SCHEDULE`) |
-| `Services/Matter/` | `MatterBridgeService` (lifecycle) with `MatterCredentials`, `MatterProvisioning`, `MatterHostNetwork` and `MatterBridgedEndpoints` (endpoints, reports, reachability) |
-| `Services/WorkflowTriggerClient.cs` | Reused gRPC client/channel with a five-second workflow trigger deadline; used only by `ElsaAutomationProvider` (remote mode) |
-| `Protos/riot_trigger.proto` | gRPC trigger contract, kept in lockstep with Elsa's `riot.proto` |
-| `Dockerfile` | .NET 10 multi-stage, Alpine, non-root, port 8080; bases pinned by digest |
-| `.github/workflows/ci.yml`, `release.yml` | CI on every push; GHCR image release on a tag |
+The file map is the [Contents](README.md#contents) table in the README; update it when you add a folder or a
+service area. What it doesn't say:
 
+- `Services/OrchestratorMqttService.cs` is the outbox's `ICommandTransport`; `Services/Commands/` has one
+  `OutboxDispatcher` per node over `Services/Outbox/` (`StoredObjects/outbox.db`, FIFO per target, backoff, TTL).
+- `Services/Automation/`: `OutboxAutomationProvider` stores triggers and runs their dispatcher as a hosted
+  service; `Services/WorkflowTriggerClient.cs` (gRPC, five-second deadline) serves only `ElsaAutomationProvider`.
+- `Services/Llm/` protects API keys with Data Protection and keeps usage in `StoredObjects/llm-usage.db`.
+  `Services/Mcp/`: `McpServerSetup` (remote port gate, JWT profiles), `McpGuard` (filters and audit), `Tools/`.
+- `Services/Persistence/`: `StoredObjects/<Type>/<Id>.json`, `IObjectStoreArchive` (export, replace,
+  `.archive/`) and `LegacyStoredObjects`. `Services/Health/NodeHistory` is in memory and bounded.
+- `Services/OrchestratorMetrics.cs`: the names are in the hub's `contracts/metrics.md`, pinned by RIoT2.Tests.
+- `.github/workflows/ci.yml` runs on every push, `release.yml` on a tag.
 ## Contracts implemented here
 
 Change code and hub contracts together. Per-repository docs link to the hub; don't copy route,
