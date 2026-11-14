@@ -5,6 +5,27 @@ then builds and pushes the Docker image to GitHub Container Registry.
 
 ## [Unreleased]
 
+Dashboard and workflow building over MCP ([I60](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-4b.md#i60-dashboard-and-workflow-building-over-mcp-m),
+[ADR 0018](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0018-mcp-server-and-remote-ai-access.md), amended). Additive. Planned as 1.25.0.
+
+- Added: the MCP tool group `dashboard` (Admin, off by default): `get_dashboard`, `list_dashboard_cards`, the page
+  tools (add, update, remove), the card tools (add, update, move, remove), `save_dashboard`, `list_dashboard_versions`
+  and `restore_dashboard_version`. They use a compact form (ids, kind, settings, report and command ids), fill in
+  defaults, the legacy type and template details, and check every card against the UI's card catalog and the
+  templates; a refused call says what to fix and saves nothing.
+- Added: the card catalog the UI uploads, `GET`/`PUT /api/v2/dashboard/cards` (PUT Admin; `409` for an older UI's),
+  stored as `StoredObjects/DashboardCardCatalog/default.json`.
+- Added: dashboard versions. Every save that changes the dashboard (the editor, an MCP tool, a restore, a backup
+  restore) records one in `StoredObjects/DashboardVersion/` with its source, caller and summary; the newest 10 are
+  kept, and the dashboard found at the first start is kept as a baseline. `GET /api/v2/dashboard/versions`,
+  `GET /api/v2/dashboard/versions/{id}`, `POST /api/v2/dashboard/versions/{id}/restore` (Admin).
+- Added: the MQTT notice `riot2/orchestrator/dashboard` `{ versionId, savedAt, source }` after every new version.
+- Added: the MCP tools `list_workflow_activities` and `get_workflow_activity` (group `workflows`), from the designer's
+  activity catalog, with an example activity and connection for the definition model.
+- Changed: the MCP activity log's target also reads `cardId`, `pageId` and `versionId`.
+
+## [1.24.0] - 2026-11-05
+
 Device account sign-in: a "Connect" button in the UI links a device to its cloud account with an OAuth 2.0
 authorization code (Netatmo first), instead of the user copying tokens. Needs `RIoT2.Core.*` 2.4.0 (pinned; packed
 locally, not yet on GitHub Packages) and a Node with the `/api/device/{id}/authorization/start` and `/complete` routes.
@@ -29,25 +50,6 @@ Additive: existing routes and stored data are unchanged.
   without a range the defaults stay. A Harvia sauna's 40-110 °C setpoint now fits, and the MELCloud, myUplink and
   Themo thermostats get their units' own ranges. The limits are part of the endpoint's signature, so such a
   thermostat is composed again once (under the same endpoint id) after the update.
-
-Dashboard and workflow building over MCP ([I60](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/increments/phase-4b.md#i60-dashboard-and-workflow-building-over-mcp-m),
-[ADR 0018](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0018-mcp-server-and-remote-ai-access.md), amended). Additive.
-
-- Added: the MCP tool group `dashboard` (Admin, off by default): `get_dashboard`, `list_dashboard_cards`, the page
-  tools (add, update, remove), the card tools (add, update, move, remove), `save_dashboard`, `list_dashboard_versions`
-  and `restore_dashboard_version`. They use a compact form (ids, kind, settings, report and command ids), fill in
-  defaults, the legacy type and template details, and check every card against the UI's card catalog and the
-  templates; a refused call says what to fix and saves nothing.
-- Added: the card catalog the UI uploads, `GET`/`PUT /api/v2/dashboard/cards` (PUT Admin; `409` for an older UI's),
-  stored as `StoredObjects/DashboardCardCatalog/default.json`.
-- Added: dashboard versions. Every save that changes the dashboard (the editor, an MCP tool, a restore, a backup
-  restore) records one in `StoredObjects/DashboardVersion/` with its source, caller and summary; the newest 10 are
-  kept, and the dashboard found at the first start is kept as a baseline. `GET /api/v2/dashboard/versions`,
-  `GET /api/v2/dashboard/versions/{id}`, `POST /api/v2/dashboard/versions/{id}/restore` (Admin).
-- Added: the MQTT notice `riot2/orchestrator/dashboard` `{ versionId, savedAt, source }` after every new version.
-- Added: the MCP tools `list_workflow_activities` and `get_workflow_activity` (group `workflows`), from the designer's
-  activity catalog, with an example activity and connection for the definition model.
-- Changed: the MCP activity log's target also reads `cardId`, `pageId` and `versionId`.
 
 ## [1.23.0] - 2026-11-04
 
