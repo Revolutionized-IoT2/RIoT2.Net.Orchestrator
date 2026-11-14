@@ -164,7 +164,9 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
                 // Matter endpoints and clear the status of nodes the backup doesn't have.
                 _storedObjects.AnnounceReplaced<NodeDeviceConfiguration>(previousNodes);
                 _storedObjects.AnnounceReplaced<Variable>(previousVariables);
-                _storedObjects.AnnounceReplaced<DashboardConfiguration>(previousDashboards);
+                using (Dashboard.DashboardSaveContext.Use(Dashboard.DashboardSources.Backup, null,
+                    $"Restored from the {backup.Manifest.Kind} backup of {backup.Manifest.CreatedAt:yyyy-MM-dd HH:mm} UTC"))
+                    _storedObjects.AnnounceReplaced<DashboardConfiguration>(previousDashboards);
 
                 var result = new RestoreResult
                 {
@@ -213,6 +215,8 @@ namespace RIoT2.Net.Orchestrator.Services.Backup
                         nameof(MatterConfiguration) => Json.Deserialize<MatterConfiguration>(json),
                         nameof(Llm.LlmConnection) => StoredObjectJson.Deserialize<Llm.LlmConnection>(json),
                         nameof(Mcp.McpConfiguration) => StoredObjectJson.Deserialize<Mcp.McpConfiguration>(json),
+                        nameof(Dashboard.DashboardVersion) => StoredObjectJson.Deserialize<Dashboard.DashboardVersion>(json),
+                        nameof(Dashboard.DashboardCardCatalog) => StoredObjectJson.Deserialize<Dashboard.DashboardCardCatalog>(json),
                         // Types this version doesn't use are restored as they are.
                         _ => json
                     };

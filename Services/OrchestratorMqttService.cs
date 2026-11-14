@@ -141,6 +141,11 @@ namespace RIoT2.Net.Orchestrator.Services
                 if (change.Operation == OperationType.Deleted && !String.IsNullOrEmpty(id))
                     Enqueue(() => ClearNodeStatusAsync(id));
             }
+
+            // Every dashboard change records a version; open UIs reload on the notice (I60).
+            if (change.Object is Dashboard.DashboardVersion version && change.Operation == OperationType.Created
+                && version.Source != Dashboard.DashboardSources.Baseline)
+                Enqueue(() => _client.PublishAsync(Dashboard.DashboardNotice.Topic, Dashboard.DashboardNotice.Payload(version)));
         }
 
         public void Dispose()

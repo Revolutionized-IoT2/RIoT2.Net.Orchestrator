@@ -59,6 +59,7 @@ service area. What it doesn't say:
   service; `Services/WorkflowTriggerClient.cs` (gRPC, five-second deadline) serves only `ElsaAutomationProvider`.
 - `Services/Llm/` protects API keys with Data Protection and keeps usage in `StoredObjects/llm-usage.db`.
   `Services/Mcp/`: `McpServerSetup` (remote port gate, JWT profiles), `McpGuard` (filters and audit), `Tools/`.
+  `Services/Dashboard/`: the UI's card catalog, dashboard versions (any save records one) and `DashboardEditor`.
 - `Services/Persistence/`: `StoredObjects/<Type>/<Id>.json`, `IObjectStoreArchive` (export, replace,
   `.archive/`) and `LegacyStoredObjects`. `Services/Health/NodeHistory` is in memory and bounded.
 - `Services/OrchestratorMetrics.cs`: the names are in the hub's `contracts/metrics.md`, pinned by RIoT2.Tests.
@@ -157,6 +158,9 @@ and [ADR 0006](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr
   write rate. No tool deletes or reaches security, backups, LLM connections, Matter or `McpConfiguration`;
   device parameters leave redacted. The remote listener is told apart by `Connection.LocalPort`, never
   by `Host`, and always checks its token.
+- Dashboard tools (I60) edit through `DashboardEditor` and save through `SaveDashboardConfiguration` inside
+  `DashboardSaveContext.Use`, so the version keeps the source and summary. Card rules come from the UI's
+  catalog; don't hard-code card kinds here.
 
 ## Pitfalls
 

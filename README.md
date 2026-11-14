@@ -6,7 +6,8 @@ online nodes, routes MQTT reports and commands, and runs the Elsa 3 workflows: i
 default, or on the Elsa container over gRPC, either way through a durable outbox. It serves the UI's
 workflow designer and keeps the *Run LLM* step's model connections
 ([ADR 0016](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0016-integrated-workflows-and-llm.md)). Optionally it is an MCP server, so AI assistants such as
-Claude and ChatGPT can read and control the home, also from the internet through Cloudflare Access
+Claude and ChatGPT can read and control the home, edit the dashboard and build workflows, also from the
+internet through Cloudflare Access
 ([ADR 0018](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/adr/0018-mcp-server-and-remote-ai-access.md),
 [remote AI access guide](https://github.com/Revolutionized-IoT2/.github/blob/main/docs/guides/remote-ai-access.md)).
 

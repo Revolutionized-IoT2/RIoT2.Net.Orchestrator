@@ -23,7 +23,7 @@ namespace RIoT2.Net.Orchestrator.Services.Mcp
     {
         public static readonly IReadOnlyList<Type> ToolTypes =
             [typeof(Tools.ValueTools), typeof(Tools.HealthTools), typeof(Tools.CommandTools), typeof(Tools.VariableTools),
-             typeof(Tools.WorkflowTools), typeof(Tools.AdminTools)];
+             typeof(Tools.WorkflowTools), typeof(Tools.DashboardTools), typeof(Tools.AdminTools)];
 
         public static readonly IReadOnlyDictionary<string, McpToolInfo> Tools = Build();
 
@@ -108,6 +108,7 @@ namespace RIoT2.Net.Orchestrator.Services.Mcp
 
                 try
                 {
+                    McpCaller.Current = caller;
                     var result = await next(context, cancellationToken);
                     var error = result.IsError == true ? string.Join(" ", result.Content.OfType<TextContentBlock>().Select(x => x.Text)) : null;
                     return Record(services, logger, caller, tool, target, started, result.IsError == true ? McpOutcomes.Error : McpOutcomes.Ok, error, result);
@@ -144,7 +145,7 @@ namespace RIoT2.Net.Orchestrator.Services.Mcp
         {
             if (arguments == null)
                 return null;
-            foreach (var name in new[] { "id", "instanceId", "definitionId", "nodeId" })
+            foreach (var name in new[] { "id", "instanceId", "definitionId", "nodeId", "cardId", "pageId", "versionId" })
                 if (arguments.TryGetValue(name, out var value) && value.ValueKind == JsonValueKind.String)
                     return Shorten(value.GetString(), 200);
             return null;

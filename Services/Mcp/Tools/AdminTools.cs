@@ -100,7 +100,8 @@ namespace RIoT2.Net.Orchestrator.Services.Mcp.Tools
         [McpServerTool(Name = "save_workflow", Title = "Save a workflow", ReadOnly = false, Idempotent = false, Destructive = true, OpenWorld = false)]
         [McpToolGroup(McpToolGroups.Admin, Write = true)]
         [Description("Creates a workflow (omit definitionId) or saves a new draft of one from its definition model, as get_workflow returns " +
-            "it, and publishes it when asked. A published workflow runs on its triggers.")]
+            "it, and publishes it when asked. A published workflow runs on its triggers. To build one, copy a workflow from get_workflow, " +
+            "and take activity types and their inputs from list_workflow_activities and get_workflow_activity.")]
         public Task<CallToolResult> SaveWorkflowAsync(
             [Description("The workflow's definition model.")] JsonElement model,
             [Description("The workflow's definition id; omit to create a workflow.")] string? definitionId = null,

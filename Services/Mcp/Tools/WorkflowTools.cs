@@ -1,4 +1,6 @@
 using System.ComponentModel;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using RIoT2.Elsa.Workflows.Management;
@@ -55,6 +57,109 @@ namespace RIoT2.Net.Orchestrator.Services.Mcp.Tools
             Engine(async () => await engine.GetRunAsync(Required(instanceId), cancellationToken) is { } run
                 ? json.Result(run)
                 : McpJson.Error($"There is no workflow run '{instanceId}'."));
+
+        [McpServerTool(Name = "list_workflow_activities", Title = "List workflow activities", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
+        [McpToolGroup(McpToolGroups.Workflows)]
+        [Description("Lists the activity types a workflow can use (triggers such as RIoT2.RIoTTrigger, and actions), with their categories and " +
+            "what they do. get_workflow_activity gives one's inputs, outcomes and an example for the definition model.")]
+        public Task<CallToolResult> ListWorkflowActivitiesAsync(
+            [Description("Only this category, such as RIoT2.")] string? category = null,
+            [Description("Trigger or Action; omit for both.")] string? kind = null,
+            [Description("Only types whose type, name or description contains this text (any case).")] string? query = null,
+            CancellationToken cancellationToken = default) =>
+            Engine(async () =>
+            {
+                var activities = (await engine.GetCatalogAsync(cancellationToken))["activities"] as JsonArray ?? [];
+                var list = activities.OfType<JsonObject>()
+                    .Where(a => Matches(a["category"], category) && Matches(a["kind"], kind)
+                        && (string.IsNullOrWhiteSpace(query) || new[] { "type", "displayName", "description" }.Any(k => Contains(a[k], query))))
+                    .Select(a => (JsonNode)new JsonObject
+                    {
+                        ["type"] = a["type"]?.DeepClone(),
+                        ["displayName"] = a["displayName"]?.DeepClone(),
+                        ["category"] = a["category"]?.DeepClone(),
+                        ["kind"] = a["kind"]?.DeepClone(),
+                        ["description"] = a["description"]?.DeepClone()
+                    });
+                return McpJson.Text(new JsonArray([.. list]).ToJsonString());
+            });
+
+        [McpServerTool(Name = "get_workflow_activity", Title = "Get a workflow activity", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
+        [McpToolGroup(McpToolGroups.Workflows)]
+        [Description("Gets an activity type: its inputs (with types, defaults and options), outputs and outcomes, and an example of the activity " +
+            "and a connection as they go in a workflow definition model's root.activities and root.connections.")]
+        public Task<CallToolResult> GetWorkflowActivityAsync(
+            [Description("The activity type from list_workflow_activities, such as RIoT2.RIoTCompare.")] string type,
+            CancellationToken cancellationToken = default) =>
+            Engine(async () =>
+            {
+                var activities = (await engine.GetCatalogAsync(cancellationToken))["activities"] as JsonArray ?? [];
+                var activity = activities.OfType<JsonObject>().FirstOrDefault(a => string.Equals((string?)a["type"], type?.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (activity == null)
+                    return McpJson.Error($"There is no activity type '{type}'; list_workflow_activities lists them.");
+                var result = (JsonObject)activity.DeepClone();
+                result["example"] = ActivityExample(activity);
+                result["howTo"] = ActivityHelp;
+                return McpJson.Text(result.ToJsonString());
+            });
+
+        internal const string ActivityHelp =
+            "Add the example to root.activities (root is an Elsa.Flowchart) with a unique id, and connect activities in root.connections from a " +
+            "source outcome port to the target's In port. Wrapped inputs are { typeName, expression: { type, value } }; the other inputs take " +
+            "their value directly. A RIoT2.RIoTTemplateItem input's value is JSON text: {\"Id\":\"<id from list_values>\",\"Name\":\"<name>\"," +
+            "\"TemplateType\":2} with TemplateType 1 for a command, 2 for a report and 3 for a variable. Triggers start a workflow; get_workflow " +
+            "shows a complete definition model to copy.";
+
+        /// <summary>An activity of <paramref name="activity"/>'s type as the definition model has it, with each input's default.</summary>
+        internal static JsonObject ActivityExample(JsonObject activity)
+        {
+            var id = Camel((string?)activity["displayName"] ?? "activity");
+            var example = new JsonObject
+            {
+                ["id"] = id,
+                ["type"] = activity["type"]?.DeepClone(),
+                ["version"] = activity["version"]?.DeepClone() ?? 1,
+                ["name"] = id,
+                ["customProperties"] = (string?)activity["kind"] == "Trigger" ? new JsonObject { ["canStartWorkflow"] = true } : new JsonObject(),
+                ["metadata"] = new JsonObject { ["designer"] = new JsonObject { ["position"] = new JsonObject { ["x"] = 0, ["y"] = 0 } } }
+            };
+            foreach (var input in (activity["inputs"] as JsonArray ?? []).OfType<JsonObject>())
+            {
+                var key = (string?)input["key"];
+                if (string.IsNullOrEmpty(key) || example.ContainsKey(key))
+                    continue;
+                var value = input["defaultValue"]?.DeepClone();
+                example[key] = input["isWrapped"]?.GetValueKind() == JsonValueKind.False ? value : new JsonObject
+                {
+                    ["typeName"] = input["typeName"]?.DeepClone(),
+                    ["expression"] = new JsonObject { ["type"] = input["defaultSyntax"]?.DeepClone() ?? "Literal", ["value"] = value }
+                };
+            }
+            var outcome = (activity["outcomes"] as JsonArray)?.FirstOrDefault()?.DeepClone() ?? "Done";
+            return new JsonObject
+            {
+                ["activity"] = example,
+                ["connection"] = new JsonObject
+                {
+                    ["source"] = new JsonObject { ["activity"] = id, ["port"] = outcome },
+                    ["target"] = new JsonObject { ["activity"] = "<next activity id>", ["port"] = "In" },
+                    ["vertices"] = new JsonArray()
+                }
+            };
+        }
+
+        private static string Camel(string text)
+        {
+            var words = text.Split([' ', '-', '_', '.'], StringSplitOptions.RemoveEmptyEntries);
+            var joined = string.Concat(words.Select(w => char.ToUpperInvariant(w[0]) + w[1..]));
+            return joined.Length == 0 ? "activity" : char.ToLowerInvariant(joined[0]) + joined[1..];
+        }
+
+        private static bool Matches(JsonNode? value, string? wanted) =>
+            string.IsNullOrWhiteSpace(wanted) || string.Equals(value?.GetValueKind() == JsonValueKind.String ? (string?)value : null, wanted.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        private static bool Contains(JsonNode? value, string text) =>
+            value?.GetValueKind() == JsonValueKind.String && ((string?)value ?? "").Contains(text.Trim(), StringComparison.OrdinalIgnoreCase);
 
         [McpServerTool(Name = "cancel_workflow_run", Title = "Cancel a workflow run", ReadOnly = false, Idempotent = true, Destructive = true, OpenWorld = false)]
         [McpToolGroup(McpToolGroups.WorkflowControl, Write = true)]

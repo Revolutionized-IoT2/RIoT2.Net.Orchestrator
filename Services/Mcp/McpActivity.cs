@@ -23,6 +23,15 @@ namespace RIoT2.Net.Orchestrator.Services.Mcp
     /// <summary>Who calls an MCP tool: the listener, a user name for the activity log, and the highest RIoT2 role.</summary>
     public sealed record McpCaller(string Listener, string User, string Role)
     {
+        private static readonly AsyncLocal<McpCaller?> _current = new();
+
+        /// <summary>The caller of the tool that runs now; <see cref="McpGuard"/> sets it around every call.</summary>
+        public static McpCaller? Current
+        {
+            get => _current.Value;
+            internal set => _current.Value = value;
+        }
+
         /// <summary>
         /// The caller behind <paramref name="user"/>. The local listener's user is the security mode's (<c>local-admin</c> while it is
         /// off); the remote listener's carries <see cref="McpClaims.Listener"/> and one role, already capped. Without a role, the

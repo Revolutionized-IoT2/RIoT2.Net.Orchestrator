@@ -28,7 +28,10 @@ namespace RIoT2.Net.Orchestrator.Services.Mcp
         /// <summary>Configuration writes: variables, node configurations and workflows. Off by default.</summary>
         public const string Admin = "admin";
 
-        public static readonly IReadOnlyList<string> All = [Read, Health, Commands, Variables, Workflows, WorkflowControl, Admin];
+        /// <summary>The dashboard: read it, change its pages and cards, restore its versions (I60). Off by default.</summary>
+        public const string Dashboard = "dashboard";
+
+        public static readonly IReadOnlyList<string> All = [Read, Health, Commands, Variables, Workflows, WorkflowControl, Dashboard, Admin];
 
         /// <summary>The groups a new installation has: reading only.</summary>
         public static readonly IReadOnlyList<string> Defaults = [Read, Health, Workflows];
@@ -38,7 +41,7 @@ namespace RIoT2.Net.Orchestrator.Services.Mcp
         {
             Read or Health or Workflows => SecurityPolicies.Viewer,
             Commands or Variables or WorkflowControl => SecurityPolicies.Operator,
-            Admin => SecurityPolicies.Admin,
+            Admin or Dashboard => SecurityPolicies.Admin,
             _ => throw new ArgumentOutOfRangeException(nameof(group), group, "Not an MCP tool group.")
         };
     }

@@ -13,6 +13,7 @@ using RIoT2.Net.Orchestrator.Services.Automation;
 using RIoT2.Net.Orchestrator.Services.Workflows;
 using RIoT2.Net.Orchestrator.Services.Backup;
 using RIoT2.Net.Orchestrator.Services.Commands;
+using RIoT2.Net.Orchestrator.Services.Dashboard;
 using RIoT2.Net.Orchestrator.Services.DeviceSignIn;
 using RIoT2.Net.Orchestrator.Services.Forecasts;
 using RIoT2.Net.Orchestrator.Services.Outbox;
@@ -83,6 +84,10 @@ builder.Services.AddSingleton<IStoredObjectStore>(s => s.GetRequiredService<Stor
 builder.Services.AddSingleton<IMessageStateService, MessageStateService>();
 builder.Services.AddSingleton<ITemplateCatalog, TemplateCatalog>();
 builder.Services.AddSingleton(TimeProvider.System);
+// The dashboard's card catalog (from the UI), its versions and the MCP tools' editor (I60).
+builder.Services.AddSingleton<DashboardCardCatalogService>();
+builder.Services.AddSingleton<DashboardVersionService>();
+builder.Services.AddSingleton<DashboardEditor>();
 // Durable delivery (design 7.1): workflow triggers wait in StoredObjects/outbox.db until Elsa takes them.
 builder.Services.AddSingleton(s => OutboxStore.Open(s.GetRequiredService<IWebHostEnvironment>()));
 // Where workflows run (RIOT2_WORKFLOW_MODE, ADR 0016): in this process, with Elsa's database in
@@ -197,6 +202,8 @@ if (!generatingOpenApiDocument)
 {
     // The rule engine's files, which this version doesn't read, go to StoredObjects/.archive/.
     LegacyStoredObjects.Archive(app.Services.GetRequiredService<IObjectStoreArchive>(), orchestratorLogger);
+    // Records a version for every dashboard save from now on (and a baseline when there are none yet).
+    app.Services.GetRequiredService<DashboardVersionService>();
 
     var orchestratorConfiguration = app.Services.GetRequiredService<IOrchestratorConfigurationService>().OrchestratorConfiguration;
     orchestratorLogger.LogInformation($"Services initialized. {orchestratorConfiguration.Manifest?.Name} - {orchestratorConfiguration.Manifest?.Version}");
